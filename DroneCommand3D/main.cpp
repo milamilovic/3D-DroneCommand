@@ -6,32 +6,36 @@
 #include <fstream>
 #include <sstream>
 
-#include <gl/glew.h>
+#include <GL/glew.h> 
 #include <GLFW/glfw3.h>
 
-#define STB_IMAGE_IMPLEMENTATION
-#include "stb_image.h"
+//GLM biblioteke
+#include <glm/glm.hpp>
+#include <glm/gtc/type_ptr.hpp>
+#include <glm/gtc/matrix_transform.hpp>
 
 unsigned int compileShader(GLenum type, const char* source);
 unsigned int createShader(const char* vsSource, const char* fsSource);
-static unsigned loadImageToTexture(const char* filePath);
 
 int main(void)
 {
+
+
     if (!glfwInit())
     {
         std::cout << "GLFW Biblioteka se nije ucitala! :(\n";
         return 1;
     }
 
+
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 
     GLFWwindow* window;
-    unsigned int wWidth = 1044;
-    unsigned int wHeight = 800;
-    const char wTitle[] = "Drone command 3D";
+    unsigned int wWidth = 500;
+    unsigned int wHeight = 500;
+    const char wTitle[] = "Drone Command 3D";
     window = glfwCreateWindow(wWidth, wHeight, wTitle, NULL, NULL);
 
     if (window == NULL)
@@ -50,15 +54,22 @@ int main(void)
         return 3;
     }
 
-    unsigned int basicShader = createShader("basic.vert", "basic.frag");
+    // ++++++++++++++++++++++++++++++++++++++++++++++++++++++ PROMJENLJIVE I BAFERI +++++++++++++++++++++++++++++++++++++++++++++++++
+
+    unsigned int unifiedShader = createShader("basic.vert", "basic.frag");
 
     float vertices[] =
     {
-        0.25, 0.0,    1.0, 0.0, 0.0, 1.0,
-       -0.25, 0.0,    0.0, 0.0, 1.0, 1.0,
-        0.0 ,-0.5,    1.0, 1.0, 1.0, 1.0
+        //X    Y    Z       R    G    B    A
+        0.25, 0.5, 0.75,   1.0, 0.0, 0.0, 0.0, //Crveni trougao - Prednji
+       -0.25, 0.5, 0.75,   1.0, 0.0, 0.0, 0.0,
+        0.0, -0.5, 0.75,   1.0, 0.0, 0.0, 0.0,
+
+        0.25, -0.5, 0.0,   0.0, 0.0, 1.0, 0.0, //Plavi trougao - Zadnji
+       -0.25, -0.5, 0.0,   0.0, 0.0, 1.0, 0.0,
+        0.0,   0.5, 0.0,   0.0, 0.0, 1.0, 0.0
     };
-    unsigned int stride = (2 + 4) * sizeof(float);
+    unsigned int stride = (3 + 4) * sizeof(float);
 
     unsigned int VAO;
     glGenVertexArrays(1, &VAO);
@@ -69,38 +80,106 @@ int main(void)
     glBindBuffer(GL_ARRAY_BUFFER, VBO);
     glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
 
-    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, stride, (void*)0);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, stride, (void*)0);
     glEnableVertexAttribArray(0);
-    glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, stride, (void*)(2 * sizeof(float)));
+    glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, stride, (void*)(3 * sizeof(float)));
     glEnableVertexAttribArray(1);
 
     glBindBuffer(GL_ARRAY_BUFFER, 0);
     glBindVertexArray(0);
 
 
-    glClearColor(0.15, 0.15, 0.15, 1.0);
+    // ++++++++++++++++++++++++++++++++++++++++++++++++++++++            UNIFORME            +++++++++++++++++++++++++++++++++++++++++++++++++
 
-    while (!glfwWindowShouldClose(window)) {
+    glm::mat4 model = glm::mat4(1.0f); //Matrica transformacija - mat4(1.0f) generise jedinicnu matricu
+    unsigned int modelLoc = glGetUniformLocation(unifiedShader, "uM");
+
+    glm::mat4 view; //Matrica pogleda (kamere)
+    view = glm::lookAt(glm::vec3(0.0f, 0.0f, 2.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f)); // lookAt(Gdje je kamera, u sta kamera gleda, jedinicni vektor pozitivne Y ose svijeta  - ovo rotira kameru)
+    unsigned int viewLoc = glGetUniformLocation(unifiedShader, "uV");
+
+
+    glm::mat4 projectionP = glm::perspective(glm::radians(90.0f), (float)wWidth / (float)wHeight, 0.1f, 100.0f); //Matrica perspektivne projekcije (FOV, Aspect Ratio, prednja ravan, zadnja ravan)
+    glm::mat4 projectionO = glm::ortho(-1.0f, 1.0f, -1.0f, 1.0f, 0.1f, 100.0f); //Matrica ortogonalne projekcije (Lijeva, desna, donja, gornja, prednja i zadnja ravan)
+    unsigned int projectionLoc = glGetUniformLocation(unifiedShader, "uP");
+
+
+    // ++++++++++++++++++++++++++++++++++++++++++++++++++++++ RENDER LOOP - PETLJA ZA CRTANJE +++++++++++++++++++++++++++++++++++++++++++++++++
+    glUseProgram(unifiedShader); //Slanje default vrijednosti uniformi
+    glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(model)); //(Adresa matrice, broj matrica koje saljemo, da li treba da se transponuju, pokazivac do matrica)
+    glUniformMatrix4fv(viewLoc, 1, GL_FALSE, glm::value_ptr(view));
+    glUniformMatrix4fv(projectionLoc, 1, GL_FALSE, glm::value_ptr(projectionO));
+    glBindVertexArray(VAO);
+
+    glClearColor(0.5, 0.5, 0.5, 1.0);
+    glCullFace(GL_BACK);//Biranje lica koje ce se eliminisati (tek nakon sto ukljucimo Face Culling)
+
+    while (!glfwWindowShouldClose(window))
+    {
         if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
         {
             glfwSetWindowShouldClose(window, GL_TRUE);
         }
 
-        glClear(GL_COLOR_BUFFER_BIT);
+        //Testiranje dubine
+        if (glfwGetKey(window, GLFW_KEY_1) == GLFW_PRESS)
+        {
+            glEnable(GL_DEPTH_TEST); //Ukljucivanje testiranja Z bafera
+        }
+        if (glfwGetKey(window, GLFW_KEY_2) == GLFW_PRESS)
+        {
+            glDisable(GL_DEPTH_TEST);
+        }
 
-        glUseProgram(basicShader);
-        glBindVertexArray(VAO);
-        glDrawArrays(GL_TRIANGLES, 0, 3);
-        glBindVertexArray(0);
-        glUseProgram(0);
+        //Odstranjivanje lica (Prethodno smo podesili koje lice uklanjamo sa glCullFace)
+        if (glfwGetKey(window, GLFW_KEY_3) == GLFW_PRESS)
+        {
+            glEnable(GL_CULL_FACE);
+        }
+        if (glfwGetKey(window, GLFW_KEY_4) == GLFW_PRESS)
+        {
+            glDisable(GL_CULL_FACE);
+        }
+
+        //Mijenjanje projekcija
+        if (glfwGetKey(window, GLFW_KEY_P) == GLFW_PRESS)
+        {
+            glUniformMatrix4fv(projectionLoc, 1, GL_FALSE, glm::value_ptr(projectionP));
+        }
+        if (glfwGetKey(window, GLFW_KEY_O) == GLFW_PRESS)
+        {
+            glUniformMatrix4fv(projectionLoc, 1, GL_FALSE, glm::value_ptr(projectionO));
+        }
+        //Transformisanje trouglova
+        if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
+        {
+            //model = glm::translate(model, glm::vec3(-0.01, 0.0, 0.0)); //Pomjeranje (Matrica transformacije, pomjeraj po XYZ)
+            model = glm::rotate(model, glm::radians(-0.5f), glm::vec3(0.0f, 1.0f, 0.0f)); //Rotiranje (Matrica transformacije, ugao rotacije u radijanima, osa rotacije)
+            //model = glm::scale(model, glm::vec3(0.99, 1.0, 1.0)); //Skaliranje (Matrica transformacije, skaliranje po XYZ)
+            glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(model));
+        }
+        if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
+        {
+            //model = glm::translate(model, glm::vec3(0.01, 0.0, 0.0));
+            //model = glm::rotate(model, glm::radians(0.5f), glm::vec3(0.0f, 1.0f, 0.0f));
+            model = glm::scale(model, glm::vec3(1.1, 1.0, 1.0));
+            glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(model));
+        }
+
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT); //Osvjezavamo i Z bafer i bafer boje
+        glDrawArrays(GL_TRIANGLES, 0, 6);
 
         glfwSwapBuffers(window);
         glfwPollEvents();
     }
 
+    // ++++++++++++++++++++++++++++++++++++++++++++++++++++++ POSPREMANJE +++++++++++++++++++++++++++++++++++++++++++++++++
+
+
     glDeleteBuffers(1, &VBO);
     glDeleteVertexArrays(1, &VAO);
-    glDeleteProgram(basicShader);
+    glDeleteProgram(unifiedShader);
+
     glfwTerminate();
     return 0;
 }
@@ -145,7 +224,6 @@ unsigned int compileShader(GLenum type, const char* source)
 }
 unsigned int createShader(const char* vsSource, const char* fsSource)
 {
-
     unsigned int program;
     unsigned int vertexShader;
     unsigned int fragmentShader;
@@ -154,7 +232,6 @@ unsigned int createShader(const char* vsSource, const char* fsSource)
 
     vertexShader = compileShader(GL_VERTEX_SHADER, vsSource);
     fragmentShader = compileShader(GL_FRAGMENT_SHADER, fsSource);
-
 
     glAttachShader(program, vertexShader);
     glAttachShader(program, fragmentShader);
@@ -178,37 +255,4 @@ unsigned int createShader(const char* vsSource, const char* fsSource)
     glDeleteShader(fragmentShader);
 
     return program;
-}
-static unsigned loadImageToTexture(const char* filePath) {
-    int TextureWidth;
-    int TextureHeight;
-    int TextureChannels;
-    unsigned char* ImageData = stbi_load(filePath, &TextureWidth, &TextureHeight, &TextureChannels, 0);
-    if (ImageData != NULL)
-    {
-        stbi__vertical_flip(ImageData, TextureWidth, TextureHeight, TextureChannels);
-
-        GLint InternalFormat = -1;
-        switch (TextureChannels) {
-        case 1: InternalFormat = GL_RED; break;
-        case 2: InternalFormat = GL_RG; break;
-        case 3: InternalFormat = GL_RGB; break;
-        case 4: InternalFormat = GL_RGBA; break;
-        default: InternalFormat = GL_RGB; break;
-        }
-
-        unsigned int Texture;
-        glGenTextures(1, &Texture);
-        glBindTexture(GL_TEXTURE_2D, Texture);
-        glTexImage2D(GL_TEXTURE_2D, 0, InternalFormat, TextureWidth, TextureHeight, 0, InternalFormat, GL_UNSIGNED_BYTE, ImageData);
-        glBindTexture(GL_TEXTURE_2D, 0);
-        stbi_image_free(ImageData);
-        return Texture;
-    }
-    else
-    {
-        std::cout << "Textura nije ucitana! Putanja texture: " << filePath << std::endl;
-        stbi_image_free(ImageData);
-        return 0;
-    }
 }
