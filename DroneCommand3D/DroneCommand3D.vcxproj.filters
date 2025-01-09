@@ -10,6 +10,9 @@
     <ClCompile Include="main.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="glad.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <None Include="res\drone.blend" />
@@ -33,5 +36,10 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="stb_image.h" />
+    <ClInclude Include="model.h" />
+    <ClInclude Include="mesh.h" />
+    <ClInclude Include="shader.h" />
+    <ClInclude Include="glad.h" />
+    <ClInclude Include="khrplatform.h" />
   </ItemGroup>
 </Project>
