@@ -1,6 +1,7 @@
 // Autor: Mila Milovic
 
 #define _CRT_SECURE_NO_WARNINGS
+#define STB_IMAGE_IMPLEMENTATION
 
 #include <iostream>
 #include <fstream>
@@ -13,6 +14,9 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/type_ptr.hpp>
 #include <glm/gtc/matrix_transform.hpp>
+
+#include "model.h"
+#include "shader.h"
 
 unsigned int compileShader(GLenum type, const char* source);
 unsigned int createShader(const char* vsSource, const char* fsSource);
@@ -46,6 +50,7 @@ int main(void)
     }
 
     glfwMakeContextCurrent(window);
+    gladLoadGL();
 
 
     if (glewInit() != GLEW_OK)
@@ -58,126 +63,71 @@ int main(void)
 
     unsigned int unifiedShader = createShader("basic.vert", "basic.frag");
 
-    float vertices[] =
-    {
-        //X    Y    Z       R    G    B    A
-        0.25, 0.5, 0.75,   1.0, 0.0, 0.0, 0.0, //Crveni trougao - Prednji
-       -0.25, 0.5, 0.75,   1.0, 0.0, 0.0, 0.0,
-        0.0, -0.5, 0.75,   1.0, 0.0, 0.0, 0.0,
-
-        0.25, -0.5, 0.0,   0.0, 0.0, 1.0, 0.0, //Plavi trougao - Zadnji
-       -0.25, -0.5, 0.0,   0.0, 0.0, 1.0, 0.0,
-        0.0,   0.5, 0.0,   0.0, 0.0, 1.0, 0.0
-    };
-    unsigned int stride = (3 + 4) * sizeof(float);
-
-    unsigned int VAO;
-    glGenVertexArrays(1, &VAO);
-    glBindVertexArray(VAO);
-
-    unsigned int VBO;
-    glGenBuffers(1, &VBO);
-    glBindBuffer(GL_ARRAY_BUFFER, VBO);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
-
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, stride, (void*)0);
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, stride, (void*)(3 * sizeof(float)));
-    glEnableVertexAttribArray(1);
 
     glBindBuffer(GL_ARRAY_BUFFER, 0);
     glBindVertexArray(0);
 
 
+    // ++++++++++++++++++++++++++++++++++++++++++++++++++++++            MODELI            +++++++++++++++++++++++++++++++++++++++++++++++++
+
+    Shader shaderProgram("basic_3d.vert", "basic_3d.frag"); // Adjust paths if needed
+    Model droneModel("res/drone.obj");
+    Model majevicaModel("res/majevicamala.obj");
+
+
     // ++++++++++++++++++++++++++++++++++++++++++++++++++++++            UNIFORME            +++++++++++++++++++++++++++++++++++++++++++++++++
 
-    glm::mat4 model = glm::mat4(1.0f); //Matrica transformacija - mat4(1.0f) generise jedinicnu matricu
-    unsigned int modelLoc = glGetUniformLocation(unifiedShader, "uM");
+    glm::mat4 model = glm::mat4(1.0f); 
+    glm::mat4 view = glm::lookAt(glm::vec3(0.0f, 0.0f, 100.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+    glm::mat4 projection = glm::perspective(glm::radians(45.0f), (float)wWidth / (float)wHeight, 0.1f, 100.0f);
 
-    glm::mat4 view; //Matrica pogleda (kamere)
-    view = glm::lookAt(glm::vec3(0.0f, 0.0f, 2.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f)); // lookAt(Gdje je kamera, u sta kamera gleda, jedinicni vektor pozitivne Y ose svijeta  - ovo rotira kameru)
-    unsigned int viewLoc = glGetUniformLocation(unifiedShader, "uV");
+    shaderProgram.use();
+    shaderProgram.setMat4("uM", model);    // Set model matrix
+    shaderProgram.setMat4("uV", view);     // Set view matrix
+    shaderProgram.setMat4("uP", projection); // Set projection matrix
 
-
-    glm::mat4 projectionP = glm::perspective(glm::radians(90.0f), (float)wWidth / (float)wHeight, 0.1f, 100.0f); //Matrica perspektivne projekcije (FOV, Aspect Ratio, prednja ravan, zadnja ravan)
-    glm::mat4 projectionO = glm::ortho(-1.0f, 1.0f, -1.0f, 1.0f, 0.1f, 100.0f); //Matrica ortogonalne projekcije (Lijeva, desna, donja, gornja, prednja i zadnja ravan)
-    unsigned int projectionLoc = glGetUniformLocation(unifiedShader, "uP");
-
-
-    // ++++++++++++++++++++++++++++++++++++++++++++++++++++++ RENDER LOOP - PETLJA ZA CRTANJE +++++++++++++++++++++++++++++++++++++++++++++++++
-    glUseProgram(unifiedShader); //Slanje default vrijednosti uniformi
-    glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(model)); //(Adresa matrice, broj matrica koje saljemo, da li treba da se transponuju, pokazivac do matrica)
-    glUniformMatrix4fv(viewLoc, 1, GL_FALSE, glm::value_ptr(view));
-    glUniformMatrix4fv(projectionLoc, 1, GL_FALSE, glm::value_ptr(projectionO));
-    glBindVertexArray(VAO);
 
     glClearColor(0.5, 0.5, 0.5, 1.0);
     glCullFace(GL_BACK);//Biranje lica koje ce se eliminisati (tek nakon sto ukljucimo Face Culling)
+    glEnable(GL_DEPTH_TEST);
 
     while (!glfwWindowShouldClose(window))
     {
+        // Input handling
         if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
         {
             glfwSetWindowShouldClose(window, GL_TRUE);
         }
 
-        //Testiranje dubine
-        if (glfwGetKey(window, GLFW_KEY_1) == GLFW_PRESS)
-        {
-            glEnable(GL_DEPTH_TEST); //Ukljucivanje testiranja Z bafera
-        }
-        if (glfwGetKey(window, GLFW_KEY_2) == GLFW_PRESS)
-        {
-            glDisable(GL_DEPTH_TEST);
-        }
+        // Clear the screen
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-        //Odstranjivanje lica (Prethodno smo podesili koje lice uklanjamo sa glCullFace)
-        if (glfwGetKey(window, GLFW_KEY_3) == GLFW_PRESS)
-        {
-            glEnable(GL_CULL_FACE);
-        }
-        if (glfwGetKey(window, GLFW_KEY_4) == GLFW_PRESS)
-        {
-            glDisable(GL_CULL_FACE);
-        }
+        // Update the transformation matrix for the majevica model
+        glm::mat4 majevicaModelMatrix = glm::mat4(1.0f);
+        majevicaModelMatrix = glm::scale(majevicaModelMatrix, glm::vec3(0.001f, 0.001f, 0.001f));  // Adjust the scale factor
+        majevicaModelMatrix = glm::translate(majevicaModelMatrix, glm::vec3(0.0f, 0.0f, -100.0f));  // Move it back to fit within the view
+        shaderProgram.setMat4("model", majevicaModelMatrix);
 
-        //Mijenjanje projekcija
-        if (glfwGetKey(window, GLFW_KEY_P) == GLFW_PRESS)
-        {
-            glUniformMatrix4fv(projectionLoc, 1, GL_FALSE, glm::value_ptr(projectionP));
-        }
-        if (glfwGetKey(window, GLFW_KEY_O) == GLFW_PRESS)
-        {
-            glUniformMatrix4fv(projectionLoc, 1, GL_FALSE, glm::value_ptr(projectionO));
-        }
-        //Transformisanje trouglova
-        if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
-        {
-            //model = glm::translate(model, glm::vec3(-0.01, 0.0, 0.0)); //Pomjeranje (Matrica transformacije, pomjeraj po XYZ)
-            model = glm::rotate(model, glm::radians(-0.5f), glm::vec3(0.0f, 1.0f, 0.0f)); //Rotiranje (Matrica transformacije, ugao rotacije u radijanima, osa rotacije)
-            //model = glm::scale(model, glm::vec3(0.99, 1.0, 1.0)); //Skaliranje (Matrica transformacije, skaliranje po XYZ)
-            glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(model));
-        }
-        if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
-        {
-            //model = glm::translate(model, glm::vec3(0.01, 0.0, 0.0));
-            //model = glm::rotate(model, glm::radians(0.5f), glm::vec3(0.0f, 1.0f, 0.0f));
-            model = glm::scale(model, glm::vec3(1.1, 1.0, 1.0));
-            glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(model));
-        }
+        // Render the majevica model
+        majevicaModel.Draw(shaderProgram);
 
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT); //Osvjezavamo i Z bafer i bafer boje
-        glDrawArrays(GL_TRIANGLES, 0, 6);
+        // Update the transformation matrix for the drone model
+        glm::mat4 droneModelMatrix = glm::mat4(1.0f);
+        droneModelMatrix = glm::translate(droneModelMatrix, glm::vec3(0.0f, -0.5f, 0.0f)); // Example translation
+        droneModelMatrix = glm::scale(droneModelMatrix, glm::vec3(0.5f, 0.5f, 0.5f)); // Example scaling
+        shaderProgram.setMat4("model", droneModelMatrix);
 
+        // Render the drone model
+        droneModel.Draw(shaderProgram);
+
+        // Swap buffers and poll IO events
         glfwSwapBuffers(window);
         glfwPollEvents();
     }
 
+
     // ++++++++++++++++++++++++++++++++++++++++++++++++++++++ POSPREMANJE +++++++++++++++++++++++++++++++++++++++++++++++++
 
-
-    glDeleteBuffers(1, &VBO);
-    glDeleteVertexArrays(1, &VAO);
     glDeleteProgram(unifiedShader);
 
     glfwTerminate();

@@ -134,6 +134,8 @@
   <ItemGroup>
     <None Include="basic.frag" />
     <None Include="basic.vert" />
+    <None Include="basic_3d.frag" />
+    <None Include="basic_3d.vert" />
     <None Include="packages.config" />
     <None Include="res\drone.blend" />
     <None Include="res\drone.blend1" />
@@ -145,10 +147,12 @@
     <None Include="res\majevicahighres.blend" />
     <None Include="res\majevicahighres.blend1" />
     <None Include="res\majevicahighres.mtl" />
+    <None Include="res\majevicamala.mtl" />
     <None Include="res\majevicamapa.mtl" />
   </ItemGroup>
   <ItemGroup>
     <Image Include="res\GOOGLE_SAT_WM.tif" />
+    <Image Include="res\majevica.png" />
     <Image Include="res\srtm.tif" />
   </ItemGroup>
   <ItemGroup>

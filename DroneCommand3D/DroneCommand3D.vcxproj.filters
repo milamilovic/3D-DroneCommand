@@ -27,12 +27,16 @@
     <None Include="res\majevicahighres.mtl" />
     <None Include="res\majevicamapa.mtl" />
     <None Include="packages.config" />
+    <None Include="basic_3d.frag" />
+    <None Include="basic_3d.vert" />
     <None Include="basic.frag" />
     <None Include="basic.vert" />
+    <None Include="res\majevicamala.mtl" />
   </ItemGroup>
   <ItemGroup>
     <Image Include="res\GOOGLE_SAT_WM.tif" />
     <Image Include="res\srtm.tif" />
+    <Image Include="res\majevica.png" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="stb_image.h" />
