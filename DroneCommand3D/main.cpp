@@ -112,7 +112,6 @@ int main(void)
             {
                 glfwSetWindowShouldClose(window, GL_TRUE);
             }
-            accumulator -= fixedTimeStep;
 
             accumulator -= fixedTimeStep;
 
@@ -127,12 +126,10 @@ int main(void)
 
 
         // render the majevica model
-        /*glm::mat4 majevicaModelMatrix = glm::mat4(1.0f);
-        //majevicaModelMatrix = glm::scale(majevicaModelMatrix, glm::vec3(0.00001f, 0.00001f, 0.000001f));
-        //majevicaModelMatrix = glm::translate(majevicaModelMatrix, glm::vec3(0.0f, 0.0f, -100.0f));
+        glm::mat4 majevicaModelMatrix = glm::mat4(1.0f);
         shaderProgram.setMat4("model", majevicaModelMatrix);
         shaderProgram.setMat4("uM", majevicaModelMatrix);
-        //majevicaModel.Draw(shaderProgram);*/
+        majevicaModel.Draw(shaderProgram);
 
         // render the drone model
         glm::mat4 droneModelMatrix = glm::mat4(1.0f);
