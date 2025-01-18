@@ -102,11 +102,21 @@ int main(void)
         // Clear the screen
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
+        shaderProgram.setVec3("lightPos", glm::vec3(0.0f, 0.0f, 10.0f));
+        shaderProgram.setVec3("viewPos", glm::vec3(0.0f, 0.0f, 100.0f)); // Camera position
+        shaderProgram.setVec3("lightColor", glm::vec3(1.0f, 1.0f, 1.0f)); // White light
+
         // Update the transformation matrix for the majevica model
         glm::mat4 majevicaModelMatrix = glm::mat4(1.0f);
         majevicaModelMatrix = glm::scale(majevicaModelMatrix, glm::vec3(0.001f, 0.001f, 0.001f));  // Adjust the scale factor
         majevicaModelMatrix = glm::translate(majevicaModelMatrix, glm::vec3(0.0f, 0.0f, -100.0f));  // Move it back to fit within the view
         shaderProgram.setMat4("model", majevicaModelMatrix);
+        //shaderProgram.setVec3("objectColor", glm::vec3(0.7f, 0.2f, 0.1f));
+
+        unsigned int textureID = majevicaModel.textures_loaded[0].id; // Assuming you have a function to get the texture ID
+        glActiveTexture(GL_TEXTURE0); // Activate texture unit 0
+        glBindTexture(GL_TEXTURE_2D, textureID);
+        shaderProgram.setInt("texture1", 0);
 
         // Render the majevica model
         majevicaModel.Draw(shaderProgram);
@@ -116,6 +126,7 @@ int main(void)
         droneModelMatrix = glm::translate(droneModelMatrix, glm::vec3(0.0f, -0.5f, 0.0f)); // Example translation
         droneModelMatrix = glm::scale(droneModelMatrix, glm::vec3(0.5f, 0.5f, 0.5f)); // Example scaling
         shaderProgram.setMat4("model", droneModelMatrix);
+        //shaderProgram.setVec3("objectColor", glm::vec3(0.1f, 0.1f, 0.15f));
 
         // Render the drone model
         droneModel.Draw(shaderProgram);

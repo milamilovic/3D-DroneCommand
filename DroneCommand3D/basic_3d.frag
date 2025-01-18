@@ -1,6 +1,7 @@
 #version 330 core
 in vec3 FragPos;
 in vec3 Normal;
+in vec2 chUV;
 
 out vec4 FragColor;
 
@@ -8,6 +9,7 @@ uniform vec3 lightPos;   // Light position
 uniform vec3 viewPos;    // Camera position
 uniform vec3 lightColor; // Light color
 uniform vec3 objectColor; // Object base color
+uniform sampler2D texture1; // Texture sampler
 
 void main()
 {
@@ -28,6 +30,10 @@ void main()
     float spec = pow(max(dot(viewDir, reflectDir), 0.0), 32);
     vec3 specular = specularStrength * spec * lightColor;
 
-    vec3 result = (ambient + diffuse + specular) * objectColor;
+    // Apply texture
+    vec3 texColor = texture(texture1, chUV).rgb;
+
+    // Combine lighting results with texture color
+    vec3 result = (ambient + diffuse + specular) * texColor;
     FragColor = vec4(result, 1.0);
 }
