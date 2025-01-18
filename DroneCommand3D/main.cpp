@@ -86,17 +86,36 @@ int main(void)
     shaderProgram.setMat4("uV", view);     // Set view matrix
     shaderProgram.setMat4("uP", projection); // Set projection matrix
 
-
-    glClearColor(0.5, 0.5, 0.5, 1.0);
-    glCullFace(GL_BACK);//Biranje lica koje ce se eliminisati (tek nakon sto ukljucimo Face Culling)
+    //60 FPS
+    float timeSinceLastUpdate = 0.0f;
+    const float fixedTimeStep = 0.016f;
+    float accumulator = 0.0f;
+    
+    //depth testing and face culling
     glEnable(GL_DEPTH_TEST);
+    glEnable(GL_CULL_FACE);
+    glCullFace(GL_BACK);
+
+    glClearColor(0.529, 0.808, 0.922, 1.0);
 
     while (!glfwWindowShouldClose(window))
     {
-        // Input handling
-        if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
-        {
-            glfwSetWindowShouldClose(window, GL_TRUE);
+
+        float currentTime = glfwGetTime();
+        float deltaTime = currentTime - timeSinceLastUpdate;
+        timeSinceLastUpdate = currentTime;
+        accumulator += deltaTime;
+        while (accumulator >= fixedTimeStep) {
+
+            // Input handling and changes
+            if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
+            {
+                glfwSetWindowShouldClose(window, GL_TRUE);
+            }
+            accumulator -= fixedTimeStep;
+
+            accumulator -= fixedTimeStep;
+
         }
 
         // Clear the screen
@@ -106,24 +125,22 @@ int main(void)
         shaderProgram.setVec3("viewPos", glm::vec3(0.0f, 0.0f, 100.0f)); // Camera position
         shaderProgram.setVec3("lightColor", glm::vec3(1.0f, 1.0f, 1.0f)); // White light
 
-        // Update the transformation matrix for the majevica model
-        glm::mat4 majevicaModelMatrix = glm::mat4(1.0f);
-        majevicaModelMatrix = glm::scale(majevicaModelMatrix, glm::vec3(0.001f, 0.001f, 0.001f));  // Adjust the scale factor
-        majevicaModelMatrix = glm::translate(majevicaModelMatrix, glm::vec3(0.0f, 0.0f, -100.0f));  // Move it back to fit within the view
+
+        // render the majevica model
+        /*glm::mat4 majevicaModelMatrix = glm::mat4(1.0f);
+        //majevicaModelMatrix = glm::scale(majevicaModelMatrix, glm::vec3(0.00001f, 0.00001f, 0.000001f));
+        //majevicaModelMatrix = glm::translate(majevicaModelMatrix, glm::vec3(0.0f, 0.0f, -100.0f));
         shaderProgram.setMat4("model", majevicaModelMatrix);
-        //shaderProgram.setVec3("objectColor", glm::vec3(0.7f, 0.2f, 0.1f));
+        shaderProgram.setMat4("uM", majevicaModelMatrix);
+        //majevicaModel.Draw(shaderProgram);*/
 
-        // Render the majevica model
-        majevicaModel.Draw(shaderProgram);
-
-        // Update the transformation matrix for the drone model
+        // render the drone model
         glm::mat4 droneModelMatrix = glm::mat4(1.0f);
+        droneModelMatrix = glm::scale(droneModelMatrix, glm::vec3(1.5f, 1.5f, 1.5f)); // Example scaling
         droneModelMatrix = glm::translate(droneModelMatrix, glm::vec3(0.0f, -0.5f, 0.0f)); // Example translation
-        droneModelMatrix = glm::scale(droneModelMatrix, glm::vec3(0.5f, 0.5f, 0.5f)); // Example scaling
         shaderProgram.setMat4("model", droneModelMatrix);
+        shaderProgram.setMat4("uM", droneModelMatrix);
         //shaderProgram.setVec3("objectColor", glm::vec3(0.1f, 0.1f, 0.15f));
-
-        // Render the drone model
         droneModel.Draw(shaderProgram);
 
         // Swap buffers and poll IO events
