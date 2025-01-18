@@ -37,8 +37,8 @@ int main(void)
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 
     GLFWwindow* window;
-    unsigned int wWidth = 500;
-    unsigned int wHeight = 500;
+    unsigned int wWidth = 1044;
+    unsigned int wHeight = 800;
     const char wTitle[] = "Drone Command 3D";
     window = glfwCreateWindow(wWidth, wHeight, wTitle, NULL, NULL);
 
@@ -112,11 +112,6 @@ int main(void)
         majevicaModelMatrix = glm::translate(majevicaModelMatrix, glm::vec3(0.0f, 0.0f, -100.0f));  // Move it back to fit within the view
         shaderProgram.setMat4("model", majevicaModelMatrix);
         //shaderProgram.setVec3("objectColor", glm::vec3(0.7f, 0.2f, 0.1f));
-
-        unsigned int textureID = majevicaModel.textures_loaded[0].id; // Assuming you have a function to get the texture ID
-        glActiveTexture(GL_TEXTURE0); // Activate texture unit 0
-        glBindTexture(GL_TEXTURE_2D, textureID);
-        shaderProgram.setInt("texture1", 0);
 
         // Render the majevica model
         majevicaModel.Draw(shaderProgram);
