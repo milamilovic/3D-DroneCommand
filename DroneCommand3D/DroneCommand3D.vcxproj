@@ -149,6 +149,8 @@
     <None Include="res\majevicahighres.mtl" />
     <None Include="res\majevicamala.mtl" />
     <None Include="res\majevicamapa.mtl" />
+    <None Include="texture.frag" />
+    <None Include="texture.vert" />
   </ItemGroup>
   <ItemGroup>
     <Image Include="res\GOOGLE_SAT_WM.tif" />
