@@ -1433,8 +1433,8 @@ int main(void)
     // ++++++++++++++++++++++++++++++++++++++++++++++++++++++            UNIFORME            +++++++++++++++++++++++++++++++++++++++++++++++++
 
     glm::mat4 model = glm::mat4(1.0f); 
-    glm::mat4 view = glm::lookAt(glm::vec3(0.0f, 0.0f, 100.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
-    glm::mat4 projection = glm::perspective(glm::radians(45.0f), (float)wWidth / (float)wHeight, 0.1f, 100.0f);
+    glm::mat4 view = glm::lookAt(glm::vec3(0.0f, 50.0f, 0.2f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.01f, 0.0f));
+    glm::mat4 projection = glm::perspective(glm::radians(100.0f), (float)wWidth / (float)wHeight, 0.1f, 100.0f);
 
     shaderProgram.use();
     shaderProgram.setMat4("uM", model);    // Set model matrix
@@ -1648,7 +1648,7 @@ int main(void)
 
         // ++++++++++++++++++++++++++++++++++++++++++++++++++++++            CRTANJE 3D DELA            +++++++++++++++++++++++++++++++++++++++++++++++++
 
-        glViewport(0, 0, wWidth, wHeight);  // Fullscreen
+        glViewport(0, wHeight - viewportHeight, viewportWidth, viewportHeight);  // 1/4 of the screen
 
         glEnable(GL_DEPTH_TEST);
         glDisable(GL_SCISSOR_TEST);  // Ensure scissor test is off for 3D
@@ -1666,19 +1666,27 @@ int main(void)
         shaderProgram.setMat4("uM", majevicaModelMatrix);
         majevicaModel.Draw(shaderProgram);
 
-        // render the drone model
-        glm::mat4 droneModelMatrix = glm::mat4(1.0f);
-        droneModelMatrix = glm::scale(droneModelMatrix, glm::vec3(1.5f, 1.5f, 1.5f)); // Example scaling
-        droneModelMatrix = glm::translate(droneModelMatrix, glm::vec3(0.0f, -0.5f, 0.0f)); // Example translation
-        shaderProgram.setMat4("model", droneModelMatrix);
-        shaderProgram.setMat4("uM", droneModelMatrix);
-        //shaderProgram.setVec3("objectColor", glm::vec3(0.1f, 0.1f, 0.15f));
+        // render the first drone model
+        glm::mat4 droneModel1 = glm::mat4(1.0f);
+        droneModel1 = glm::scale(droneModel1, glm::vec3(0.8f, 0.8f, 0.8f));
+        droneModel1 = glm::translate(droneModel1, glm::vec3(15.0f, 9.0f, 19.0f));
+        shaderProgram.setMat4("model", droneModel1);
+        shaderProgram.setMat4("uM", droneModel1);
+        //shaderProgram.setVec3("objectColor", glm::vec3(0.0f, 1.0f, 0.0f));
+        droneModel.Draw(shaderProgram);
+
+        // render the second drone model
+        glm::mat4 droneModel2 = glm::mat4(1.0f);
+        droneModel2 = glm::scale(droneModel2, glm::vec3(0.8f, 0.8f, 0.8f));
+        droneModel2 = glm::translate(droneModel2, glm::vec3(-18.0f, 9.0f, 19.0f));
+        shaderProgram.setMat4("model", droneModel2);
+        shaderProgram.setMat4("uM", droneModel2);
         droneModel.Draw(shaderProgram);
 
 
         // ++++++++++++++++++++++++++++++++++++++++++++++++++++++            CRTANJE 2D DELA            +++++++++++++++++++++++++++++++++++++++++++++++++
 
-        //inicijalizacija da se crta na 2/3 ekrana
+        //inicijalizacija da se crta na 1/4 ekrana
         glViewport(wWidth - viewportWidth, wHeight - viewportHeight, viewportWidth, viewportHeight);
 
         glDisable(GL_DEPTH_TEST);

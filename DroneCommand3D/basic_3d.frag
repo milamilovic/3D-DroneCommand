@@ -14,7 +14,7 @@ uniform sampler2D texture1; // Texture sampler
 void main()
 {
     // Ambient lighting
-    float ambientStrength = 0.1;
+    float ambientStrength = 0.5;
     vec3 ambient = ambientStrength * lightColor;
 
     // Diffuse lighting
@@ -24,7 +24,7 @@ void main()
     vec3 diffuse = diff * lightColor;
 
     // Specular lighting
-    float specularStrength = 0.5;
+    float specularStrength = 0.4;
     vec3 viewDir = normalize(viewPos - FragPos);
     vec3 reflectDir = reflect(-lightDir, norm);
     float spec = pow(max(dot(viewDir, reflectDir), 0.0), 32);
