@@ -22,6 +22,90 @@ unsigned int compileShader(GLenum type, const char* source);
 unsigned int createShader(const char* vsSource, const char* fsSource);
 static unsigned loadImageToTexture(const char* filePath);
 
+unsigned loadAndConfigureTexture(const char* filePath, unsigned shaderProgram, const char* uniformName, int textureUnit) {
+    unsigned texture = loadImageToTexture(filePath);
+
+    glBindTexture(GL_TEXTURE_2D, texture);
+    glGenerateMipmap(GL_TEXTURE_2D);
+
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+
+    glBindTexture(GL_TEXTURE_2D, 0);
+
+    // Set texture uniform
+    glUseProgram(shaderProgram);
+    unsigned uTexLoc = glGetUniformLocation(shaderProgram, uniformName);
+    glUniform1i(uTexLoc, textureUnit);
+    glUseProgram(0);
+
+    return texture;
+}
+
+void createVAO(unsigned int& VAO, unsigned int& VBO, unsigned int& EBO,
+    const float* vertices, size_t vertexSize,
+    const unsigned int* indices, size_t indexSize,
+    int vertexAttribCount, int stride, int texCoordOffset) {
+    glGenVertexArrays(1, &VAO);
+    glGenBuffers(1, &VBO);
+    glBindVertexArray(VAO);
+
+    glBindBuffer(GL_ARRAY_BUFFER, VBO);
+    glBufferData(GL_ARRAY_BUFFER, vertexSize, vertices, GL_STATIC_DRAW);
+
+    if (indices) { // if an EBO is needed
+        glGenBuffers(1, &EBO);
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
+        glBufferData(GL_ELEMENT_ARRAY_BUFFER, indexSize, indices, GL_STATIC_DRAW);
+    }
+
+    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, stride, (void*)0);
+    glEnableVertexAttribArray(0);
+
+    glVertexAttribPointer(1, vertexAttribCount, GL_FLOAT, GL_FALSE, stride, (void*)(texCoordOffset));
+    glEnableVertexAttribArray(1);
+
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+    glBindVertexArray(0);
+}
+
+void drawDigit(int index, int digit, GLuint texture0, GLuint texture1, GLuint texture2, GLuint texture3, GLuint texture4, GLuint texture5, GLuint texture6, GLuint texture7, GLuint texture8, GLuint texture9, GLuint* vao) {
+    GLuint texture;
+
+    switch (digit) {
+    case 0: texture = texture0; break;
+    case 1: texture = texture1; break;
+    case 2: texture = texture2; break;
+    case 3: texture = texture3; break;
+    case 4: texture = texture4; break;
+    case 5: texture = texture5; break;
+    case 6: texture = texture6; break;
+    case 7: texture = texture7; break;
+    case 8: texture = texture8; break;
+    case 9: texture = texture9; break;
+    default: texture = texture0; // Fallback to 0 if digit is out of bounds
+    }
+
+    glBindTexture(GL_TEXTURE_2D, texture);
+    glBindVertexArray(vao[index]);
+    glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+    glBindVertexArray(0);
+}
+
+void drawBattery(int battery, GLuint texture0, GLuint texture1, GLuint texture2, GLuint texture3, GLuint texture4, GLuint texture5, GLuint texture6, GLuint texture7, GLuint texture8, GLuint texture9, GLuint* vao) {
+    int hundreds = battery / 100;
+    int tens = (battery / 10) % 10;
+    int ones = battery % 10;
+
+    if (hundreds != 0) {
+        drawDigit(0, hundreds, texture0, texture1, texture2, texture3, texture4, texture5, texture6, texture7, texture8, texture9, vao);
+    }
+    drawDigit(1, tens, texture0, texture1, texture2, texture3, texture4, texture5, texture6, texture7, texture8, texture9, vao);
+    drawDigit(2, ones, texture0, texture1, texture2, texture3, texture4, texture5, texture6, texture7, texture8, texture9, vao);
+}
+
 struct Drone {
     float x, y;
     float radius;
@@ -238,8 +322,8 @@ int main(void)
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 
     GLFWwindow* window;
-    unsigned int wWidth = 1044;
-    unsigned int wHeight = 800;
+    unsigned int wWidth = 1392;
+    unsigned int wHeight = 1066;
     const char wTitle[] = "Drone Command 3D";
     window = glfwCreateWindow(wWidth, wHeight, wTitle, NULL, NULL);
 
@@ -264,6 +348,7 @@ int main(void)
 
     unsigned int unifiedShader = createShader("basic.vert", "basic.frag");
     unsigned int textureShader = createShader("texture.vert", "texture.frag");
+    unsigned int mapShader = createShader("map.vert", "map.frag");
 
 
     glBindBuffer(GL_ARRAY_BUFFER, 0);
@@ -296,6 +381,10 @@ int main(void)
     // ++++++++++++++++++++++++++++++++++++++++++++++++++++++            2D INICIJALIZACIJA            +++++++++++++++++++++++++++++++++++++++++++++++++
 
 
+
+    unsigned int stride = (2 + 2) * sizeof(float);
+
+    //map
     float map[] = {
         // X    Y      S    T
         1.0f,  1.0f,  1.0f, 1.0f, // Top-right
@@ -303,124 +392,41 @@ int main(void)
        -1.0f, -0.7f,  0.0f, 0.0f, // Bottom-left
        -1.0f,  1.0f,  0.0f, 1.0f  // Top-left
     };
-
     unsigned int indices[] = {
         0, 3, 1, // First triangle
         1, 3, 2  // Second triangle
     };
-
-    unsigned int stride = (2 + 2) * sizeof(float);
-
     unsigned int VAO, VBO, EBO;
-    glGenVertexArrays(1, &VAO);
-    glGenBuffers(1, &VBO);
-    glGenBuffers(1, &EBO);
+    createVAO(VAO, VBO, EBO, map, sizeof(map), indices, sizeof(indices), 2, stride, 2 * sizeof(float));
 
-    glBindVertexArray(VAO);
-
-    glBindBuffer(GL_ARRAY_BUFFER, VBO);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(map), map, GL_STATIC_DRAW);
-
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW);
-
-    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, stride, (void*)0);
-    glEnableVertexAttribArray(0);
-
-    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, (void*)(2 * sizeof(float)));
-    glEnableVertexAttribArray(1);
-
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 
     //no fly zone
     unsigned int noFlyZoneVAO, noFlyZoneVBO;
-    glGenVertexArrays(1, &noFlyZoneVAO);
-    glGenBuffers(1, &noFlyZoneVBO);
-    glBindVertexArray(noFlyZoneVAO);
-    glBindBuffer(GL_ARRAY_BUFFER, noFlyZoneVBO);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(noFlyZoneVertices), noFlyZoneVertices, GL_STATIC_DRAW);
-    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)0);
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)(2 * sizeof(float)));
-    glEnableVertexAttribArray(1);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
+    createVAO(noFlyZoneVAO, noFlyZoneVBO, EBO, noFlyZoneVertices, sizeof(noFlyZoneVertices), nullptr, 0, 4, 6 * sizeof(float), 2 * sizeof(float));
 
     //drone 1
     unsigned int droneVAO1, droneVBO1;
-    glGenVertexArrays(1, &droneVAO1);
-    glGenBuffers(1, &droneVBO1);
-    glBindVertexArray(droneVAO1);
-    glBindBuffer(GL_ARRAY_BUFFER, droneVBO1);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(droneVertices1), droneVertices1, GL_STATIC_DRAW);
-    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)0);
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)(2 * sizeof(float)));
-    glEnableVertexAttribArray(1);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
+    createVAO(droneVAO1, droneVBO1, EBO, droneVertices1, sizeof(droneVertices1), nullptr, 0, 4, 6 * sizeof(float), 2 * sizeof(float));
+
 
     //drone 2
     unsigned int droneVAO2, droneVBO2;
-    glGenVertexArrays(1, &droneVAO2);
-    glGenBuffers(1, &droneVBO2);
-    glBindVertexArray(droneVAO2);
-    glBindBuffer(GL_ARRAY_BUFFER, droneVBO2);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(droneVertices2), droneVertices2, GL_STATIC_DRAW);
-    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)0);
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)(2 * sizeof(float)));
-    glEnableVertexAttribArray(1);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
+    createVAO(droneVAO2, droneVBO2, EBO, droneVertices2, sizeof(droneVertices2), nullptr, 0, 4, 6 * sizeof(float), 2 * sizeof(float));
 
+
+    //progress bars
     unsigned int progressIndices1[] = {
         0, 2, 1, 2, 0, 3, // Background
         4, 6, 5, 6, 4, 7  // Filled portion
     };
-
     unsigned int progressIndices2[] = {
         0, 2, 1, 2, 0, 3, // Background
         4, 6, 5, 6, 4, 7  // Filled portion
     };
-
-    //progress bar 1
     unsigned int progressVAO1, progressVBO1, progressEBO1;
-    glGenVertexArrays(1, &progressVAO1);
-    glGenBuffers(1, &progressVBO1);
-    glGenBuffers(1, &progressEBO1);
-    glBindVertexArray(progressVAO1);
-    glBindBuffer(GL_ARRAY_BUFFER, progressVBO1);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(progressVertices1), progressVertices1, GL_STATIC_DRAW);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, progressEBO1);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(progressIndices1), progressIndices1, GL_STATIC_DRAW);
-    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)0);
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)(2 * sizeof(float)));
-    glEnableVertexAttribArray(1);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-
-    //progress bar 2
     unsigned int progressVAO2, progressVBO2, progressEBO2;
-    glGenVertexArrays(1, &progressVAO2);
-    glGenBuffers(1, &progressVBO2);
-    glGenBuffers(1, &progressEBO2);
-    glBindVertexArray(progressVAO2);
-    glBindBuffer(GL_ARRAY_BUFFER, progressVBO2);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(progressVertices2), progressVertices2, GL_STATIC_DRAW);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, progressEBO2);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(progressIndices2), progressIndices2, GL_STATIC_DRAW);
-    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)0);
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)(2 * sizeof(float)));
-    glEnableVertexAttribArray(1);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+    createVAO(progressVAO1, progressVBO1, progressEBO1, progressVertices1, sizeof(progressVertices1), progressIndices1, sizeof(progressIndices1), 4, 6 * sizeof(float), 2 * sizeof(float));
+    createVAO(progressVAO2, progressVBO2, progressEBO2, progressVertices2, sizeof(progressVertices2), progressIndices2, sizeof(progressIndices2), 4, 6 * sizeof(float), 2 * sizeof(float));
 
     //battery level 1
     float rectangleVertices11[] = {
@@ -445,60 +451,24 @@ int main(void)
         -0.67f, -0.76f,       1.0f, 1.0f
     };
     unsigned int batteryIndices1[] = {
-        0, 3, 1,
-        1, 3, 2
+        0, 1, 3,
+        1, 2, 3
     };
     unsigned int batteryIndices2[] = {
-        0, 3, 1,
-        1, 3, 2
+        0, 1, 3,
+        1, 2, 3
     };
     unsigned int batteryIndices3[] = {
-        0, 3, 1,
-        1, 3, 2
+        0, 1, 3,
+        1, 2, 3
     };
     unsigned int batteryVao1[3], batteryVbo1[3], batteryEbo1[3];
-    glGenVertexArrays(3, batteryVao1);
-    glGenBuffers(3, batteryVbo1);
-    glGenBuffers(3, batteryEbo1);
-    //first number
-    glBindVertexArray(batteryVao1[0]);
-    glBindBuffer(GL_ARRAY_BUFFER, batteryVbo1[0]);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(rectangleVertices11), rectangleVertices11, GL_STATIC_DRAW);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, batteryEbo1[0]);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(batteryIndices1), batteryIndices1, GL_STATIC_DRAW);
-    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, stride, (void*)0);
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, (void*)(2 * sizeof(float)));
-    glEnableVertexAttribArray(1);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-    //second number
-    glBindVertexArray(batteryVao1[1]);
-    glBindBuffer(GL_ARRAY_BUFFER, batteryVbo1[1]);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(rectangleVertices12), rectangleVertices12, GL_STATIC_DRAW);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, batteryEbo1[1]);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(batteryIndices2), batteryIndices2, GL_STATIC_DRAW);
-    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, stride, (void*)0);
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, (void*)(2 * sizeof(float)));
-    glEnableVertexAttribArray(1);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-    //third number
-    glBindVertexArray(batteryVao1[2]);
-    glBindBuffer(GL_ARRAY_BUFFER, batteryVbo1[2]);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(rectangleVertices13), rectangleVertices13, GL_STATIC_DRAW);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, batteryEbo1[2]);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(batteryIndices3), batteryIndices3, GL_STATIC_DRAW);
-    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, stride, (void*)0);
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, (void*)(2 * sizeof(float)));
-    glEnableVertexAttribArray(1);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+
+    int texStride = 4 * sizeof(float);  // 2 floats for position and 2 for texture coords
+    int texCoordOffset = 2 * sizeof(float);  // Texture coordinates start after the position
+    createVAO(batteryVao1[0], batteryVbo1[0], batteryEbo1[0], rectangleVertices11, sizeof(rectangleVertices11), batteryIndices1, sizeof(batteryIndices1), 2, texStride, texCoordOffset);
+    createVAO(batteryVao1[1], batteryVbo1[1], batteryEbo1[1], rectangleVertices12, sizeof(rectangleVertices12), batteryIndices2, sizeof(batteryIndices2), 2, texStride, texCoordOffset);
+    createVAO(batteryVao1[2], batteryVbo1[2], batteryEbo1[2], rectangleVertices13, sizeof(rectangleVertices13), batteryIndices3, sizeof(batteryIndices3), 2, texStride, texCoordOffset);
 
     //battery level 2
     float rectangleVertices21[] = {
@@ -523,60 +493,21 @@ int main(void)
         -0.17f, -0.76f,       1.0f, 1.0f
     };
     unsigned int batteryIndices21[] = {
-        0, 3, 1,
-        1, 3, 2
+        0, 1, 3,
+        1, 2, 3
     };
     unsigned int batteryIndices22[] = {
-        0, 3, 1,
-        1, 3, 2
+        0, 1, 3,
+        1, 2, 3
     };
     unsigned int batteryIndices23[] = {
-        0, 3, 1,
-        1, 3, 2
+        0, 1, 3,
+        1, 2, 3
     };
     unsigned int batteryVao2[3], batteryVbo2[3], batteryEbo2[3];
-    glGenVertexArrays(3, batteryVao2);
-    glGenBuffers(3, batteryVbo2);
-    glGenBuffers(3, batteryEbo2);
-    //first number
-    glBindVertexArray(batteryVao2[0]);
-    glBindBuffer(GL_ARRAY_BUFFER, batteryVbo2[0]);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(rectangleVertices21), rectangleVertices21, GL_STATIC_DRAW);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, batteryEbo2[0]);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(batteryIndices21), batteryIndices21, GL_STATIC_DRAW);
-    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, stride, (void*)0);
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, (void*)(2 * sizeof(float)));
-    glEnableVertexAttribArray(1);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-    //second number
-    glBindVertexArray(batteryVao2[1]);
-    glBindBuffer(GL_ARRAY_BUFFER, batteryVbo2[1]);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(rectangleVertices22), rectangleVertices22, GL_STATIC_DRAW);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, batteryEbo2[1]);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(batteryIndices22), batteryIndices22, GL_STATIC_DRAW);
-    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, stride, (void*)0);
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, (void*)(2 * sizeof(float)));
-    glEnableVertexAttribArray(1);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-    //third number
-    glBindVertexArray(batteryVao2[2]);
-    glBindBuffer(GL_ARRAY_BUFFER, batteryVbo2[2]);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(rectangleVertices23), rectangleVertices23, GL_STATIC_DRAW);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, batteryEbo2[2]);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(batteryIndices23), batteryIndices23, GL_STATIC_DRAW);
-    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, stride, (void*)0);
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, (void*)(2 * sizeof(float)));
-    glEnableVertexAttribArray(1);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+    createVAO(batteryVao2[0], batteryVbo2[0], batteryEbo2[0], rectangleVertices21, sizeof(rectangleVertices21), batteryIndices21, sizeof(batteryIndices21), 2, texStride, texCoordOffset);
+    createVAO(batteryVao2[1], batteryVbo2[1], batteryEbo2[1], rectangleVertices22, sizeof(rectangleVertices22), batteryIndices22, sizeof(batteryIndices22), 2, texStride, texCoordOffset);
+    createVAO(batteryVao2[2], batteryVbo2[2], batteryEbo2[2], rectangleVertices23, sizeof(rectangleVertices23), batteryIndices23, sizeof(batteryIndices23), 2, texStride, texCoordOffset);
 
     //coordinates 1 : X
     float coordinates1x[] = {
@@ -640,12 +571,12 @@ int main(void)
         1, 2, 3
     };
     unsigned int indices1dot1[] = {
-        0, 1, 3,
-        1, 2, 3
+        0, 3, 1,
+        1, 3, 2
     };
     unsigned int indices1dot2[] = {
-        0, 1, 3,
-        1, 2, 3
+        0, 3, 1,
+        1, 3, 2
     };
     unsigned int indices1minus[] = {
         0, 1, 3,
@@ -656,8 +587,8 @@ int main(void)
         1, 2, 3
     };
     unsigned int indices1dot[] = {
-        0, 1, 3,
-        1, 2, 3
+        0, 3, 1,
+        1, 3, 2
     };
     unsigned int indices1num2[] = {
         0, 1, 3,
@@ -668,114 +599,15 @@ int main(void)
         1, 2, 3
     };
     unsigned int coordinatesVao1[8], coordinatesVbo1[8], coordinatesEbo1[8];
-    glGenVertexArrays(8, coordinatesVao1);
-    glGenBuffers(8, coordinatesVbo1);
-    glGenBuffers(8, coordinatesEbo1);
-    //drone 1 x
-    glBindVertexArray(coordinatesVao1[0]);
-    glBindBuffer(GL_ARRAY_BUFFER, coordinatesVbo1[0]);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(coordinates1x), coordinates1x, GL_STATIC_DRAW);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, coordinatesEbo1[0]);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices1x), indices1x, GL_STATIC_DRAW);
-    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, stride, (void*)0);
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, (void*)(2 * sizeof(float)));
-    glEnableVertexAttribArray(1);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-    //drone 1 x dot 1
-    glBindVertexArray(coordinatesVao1[1]);
-    glBindBuffer(GL_ARRAY_BUFFER, coordinatesVbo1[1]);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(coordinates1dot1), coordinates1dot1, GL_STATIC_DRAW);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, coordinatesEbo1[1]);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices1dot1), indices1dot1, GL_STATIC_DRAW);
-    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, stride, (void*)0);
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, (void*)(2 * sizeof(float)));
-    glEnableVertexAttribArray(1);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-    //drone 1 x dot 2
-    glBindVertexArray(coordinatesVao1[2]);
-    glBindBuffer(GL_ARRAY_BUFFER, coordinatesVbo1[2]);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(coordinates1dot2), coordinates1dot2, GL_STATIC_DRAW);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, coordinatesEbo1[2]);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices1dot2), indices1dot2, GL_STATIC_DRAW);
-    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, stride, (void*)0);
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, (void*)(2 * sizeof(float)));
-    glEnableVertexAttribArray(1);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-    //drone 1 x minus
-    glBindVertexArray(coordinatesVao1[3]);
-    glBindBuffer(GL_ARRAY_BUFFER, coordinatesVbo1[3]);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(coordinates1minus), coordinates1minus, GL_STATIC_DRAW);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, coordinatesEbo1[3]);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices1minus), indices1minus, GL_STATIC_DRAW);
-    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, stride, (void*)0);
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, (void*)(2 * sizeof(float)));
-    glEnableVertexAttribArray(1);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-    //drone 1 x number 1
-    glBindVertexArray(coordinatesVao1[4]);
-    glBindBuffer(GL_ARRAY_BUFFER, coordinatesVbo1[4]);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(coordinates1num1), coordinates1num1, GL_STATIC_DRAW);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, coordinatesEbo1[4]);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices1num1), indices1num1, GL_STATIC_DRAW);
-    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, stride, (void*)0);
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, (void*)(2 * sizeof(float)));
-    glEnableVertexAttribArray(1);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-    //drone 1 x dot
-    glBindVertexArray(coordinatesVao1[5]);
-    glBindBuffer(GL_ARRAY_BUFFER, coordinatesVbo1[5]);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(coordinates1dot), coordinates1dot, GL_STATIC_DRAW);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, coordinatesEbo1[5]);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices1dot), indices1dot, GL_STATIC_DRAW);
-    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, stride, (void*)0);
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, (void*)(2 * sizeof(float)));
-    glEnableVertexAttribArray(1);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-    //drone 1 x number 2
-    glBindVertexArray(coordinatesVao1[6]);
-    glBindBuffer(GL_ARRAY_BUFFER, coordinatesVbo1[6]);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(coordinates1num2), coordinates1num2, GL_STATIC_DRAW);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, coordinatesEbo1[6]);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices1num1), indices1num1, GL_STATIC_DRAW);
-    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, stride, (void*)0);
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, (void*)(2 * sizeof(float)));
-    glEnableVertexAttribArray(1);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-    //drone 1 x number 3
-    glBindVertexArray(coordinatesVao1[7]);
-    glBindBuffer(GL_ARRAY_BUFFER, coordinatesVbo1[7]);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(coordinates1num3), coordinates1num3, GL_STATIC_DRAW);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, coordinatesEbo1[7]);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices1num1), indices1num1, GL_STATIC_DRAW);
-    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, stride, (void*)0);
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, (void*)(2 * sizeof(float)));
-    glEnableVertexAttribArray(1);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-
+    createVAO(coordinatesVao1[0], coordinatesVbo1[0], coordinatesEbo1[0], coordinates1x, sizeof(coordinates1x), indices1x, sizeof(indices1x), 2, texStride, texCoordOffset);
+    createVAO(coordinatesVao1[1], coordinatesVbo1[1], coordinatesEbo1[1], coordinates1dot1, sizeof(coordinates1dot1), indices1dot1, sizeof(indices1dot1), 2, texStride, texCoordOffset);
+    createVAO(coordinatesVao1[2], coordinatesVbo1[2], coordinatesEbo1[2], coordinates1dot2, sizeof(coordinates1dot2), indices1dot2, sizeof(indices1dot2), 2, texStride, texCoordOffset);
+    createVAO(coordinatesVao1[3], coordinatesVbo1[3], coordinatesEbo1[3], coordinates1minus, sizeof(coordinates1minus), indices1minus, sizeof(indices1minus), 2, texStride, texCoordOffset);
+    createVAO(coordinatesVao1[4], coordinatesVbo1[4], coordinatesEbo1[4], coordinates1num1, sizeof(coordinates1num1), indices1num1, sizeof(indices1num1), 2, texStride, texCoordOffset);
+    createVAO(coordinatesVao1[5], coordinatesVbo1[5], coordinatesEbo1[5], coordinates1dot, sizeof(coordinates1dot), indices1dot, sizeof(indices1dot), 2, texStride, texCoordOffset);
+    createVAO(coordinatesVao1[6], coordinatesVbo1[6], coordinatesEbo1[6], coordinates1num2, sizeof(coordinates1num2), indices1num2, sizeof(indices1num2), 2, texStride, texCoordOffset);
+    createVAO(coordinatesVao1[7], coordinatesVbo1[7], coordinatesEbo1[7], coordinates1num3, sizeof(coordinates1num3), indices1num3, sizeof(indices1num3), 2, texStride, texCoordOffset);
+    
 
     //coordinates 1 : Y
     float coordinates1y[] = {
@@ -839,12 +671,12 @@ int main(void)
         1, 2, 3
     };
     unsigned int indices1dot1y[] = {
-        0, 1, 3,
-        1, 2, 3
+        0, 3, 1,
+        1, 3, 2
     };
     unsigned int indices1dot2y[] = {
-        0, 1, 3,
-        1, 2, 3
+        0, 3, 1,
+        1, 3, 2
     };
     unsigned int indices1minusy[] = {
         0, 1, 3,
@@ -855,8 +687,8 @@ int main(void)
         1, 2, 3
     };
     unsigned int indices1doty[] = {
-        0, 1, 3,
-        1, 2, 3
+        0, 3, 1,
+        1, 3, 2
     };
     unsigned int indices1num2y[] = {
         0, 1, 3,
@@ -867,113 +699,14 @@ int main(void)
         1, 2, 3
     };
     unsigned int coordinatesVao1y[8], coordinatesVbo1y[8], coordinatesEbo1y[8];
-    glGenVertexArrays(8, coordinatesVao1y);
-    glGenBuffers(8, coordinatesVbo1y);
-    glGenBuffers(8, coordinatesEbo1y);
-    //drone 1 y
-    glBindVertexArray(coordinatesVao1y[0]);
-    glBindBuffer(GL_ARRAY_BUFFER, coordinatesVbo1y[0]);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(coordinates1y), coordinates1y, GL_STATIC_DRAW);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, coordinatesEbo1y[0]);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices1y), indices1y, GL_STATIC_DRAW);
-    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, stride, (void*)0);
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, (void*)(2 * sizeof(float)));
-    glEnableVertexAttribArray(1);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-    //drone 1 y dot 1
-    glBindVertexArray(coordinatesVao1y[1]);
-    glBindBuffer(GL_ARRAY_BUFFER, coordinatesVbo1y[1]);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(coordinates1dot1y), coordinates1dot1y, GL_STATIC_DRAW);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, coordinatesEbo1y[1]);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices1dot1y), indices1dot1y, GL_STATIC_DRAW);
-    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, stride, (void*)0);
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, (void*)(2 * sizeof(float)));
-    glEnableVertexAttribArray(1);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-    //drone 1 y dot 2
-    glBindVertexArray(coordinatesVao1y[2]);
-    glBindBuffer(GL_ARRAY_BUFFER, coordinatesVbo1y[2]);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(coordinates1dot2y), coordinates1dot2y, GL_STATIC_DRAW);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, coordinatesEbo1y[2]);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices1dot2y), indices1dot2y, GL_STATIC_DRAW);
-    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, stride, (void*)0);
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, (void*)(2 * sizeof(float)));
-    glEnableVertexAttribArray(1);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-    //drone 1 y minus
-    glBindVertexArray(coordinatesVao1y[3]);
-    glBindBuffer(GL_ARRAY_BUFFER, coordinatesVbo1y[3]);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(coordinates1minusy), coordinates1minusy, GL_STATIC_DRAW);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, coordinatesEbo1y[3]);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices1minusy), indices1minusy, GL_STATIC_DRAW);
-    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, stride, (void*)0);
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, (void*)(2 * sizeof(float)));
-    glEnableVertexAttribArray(1);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-    //drone 1 y number 1
-    glBindVertexArray(coordinatesVao1y[4]);
-    glBindBuffer(GL_ARRAY_BUFFER, coordinatesVbo1y[4]);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(coordinates1num1y), coordinates1num1y, GL_STATIC_DRAW);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, coordinatesEbo1y[4]);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices1num1y), indices1num1y, GL_STATIC_DRAW);
-    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, stride, (void*)0);
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, (void*)(2 * sizeof(float)));
-    glEnableVertexAttribArray(1);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-    //drone 1 y dot
-    glBindVertexArray(coordinatesVao1y[5]);
-    glBindBuffer(GL_ARRAY_BUFFER, coordinatesVbo1y[5]);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(coordinates1doty), coordinates1doty, GL_STATIC_DRAW);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, coordinatesEbo1y[5]);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices1doty), indices1doty, GL_STATIC_DRAW);
-    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, stride, (void*)0);
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, (void*)(2 * sizeof(float)));
-    glEnableVertexAttribArray(1);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-    //drone 1 y number 2
-    glBindVertexArray(coordinatesVao1y[6]);
-    glBindBuffer(GL_ARRAY_BUFFER, coordinatesVbo1y[6]);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(coordinates1num2y), coordinates1num2y, GL_STATIC_DRAW);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, coordinatesEbo1y[6]);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices1num1y), indices1num1y, GL_STATIC_DRAW);
-    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, stride, (void*)0);
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, (void*)(2 * sizeof(float)));
-    glEnableVertexAttribArray(1);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-    //drone 1 y number 3
-    glBindVertexArray(coordinatesVao1y[7]);
-    glBindBuffer(GL_ARRAY_BUFFER, coordinatesVbo1y[7]);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(coordinates1num3y), coordinates1num3y, GL_STATIC_DRAW);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, coordinatesEbo1y[7]);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices1num1y), indices1num1y, GL_STATIC_DRAW);
-    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, stride, (void*)0);
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, (void*)(2 * sizeof(float)));
-    glEnableVertexAttribArray(1);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+    createVAO(coordinatesVao1y[0], coordinatesVbo1y[0], coordinatesEbo1y[0], coordinates1y, sizeof(coordinates1y), indices1y, sizeof(indices1y), 2, texStride, texCoordOffset);
+    createVAO(coordinatesVao1y[1], coordinatesVbo1y[1], coordinatesEbo1y[1], coordinates1dot1y, sizeof(coordinates1dot1y), indices1dot1y, sizeof(indices1dot1y), 2, texStride, texCoordOffset);
+    createVAO(coordinatesVao1y[2], coordinatesVbo1y[2], coordinatesEbo1y[2], coordinates1dot2y, sizeof(coordinates1dot2y), indices1dot2y, sizeof(indices1dot2y), 2, texStride, texCoordOffset);
+    createVAO(coordinatesVao1y[3], coordinatesVbo1y[3], coordinatesEbo1y[3], coordinates1minusy, sizeof(coordinates1minusy), indices1minusy, sizeof(indices1minusy), 2, texStride, texCoordOffset);
+    createVAO(coordinatesVao1y[4], coordinatesVbo1y[4], coordinatesEbo1y[4], coordinates1num1y, sizeof(coordinates1num1y), indices1num1y, sizeof(indices1num1y), 2, texStride, texCoordOffset);
+    createVAO(coordinatesVao1y[5], coordinatesVbo1y[5], coordinatesEbo1y[5], coordinates1doty, sizeof(coordinates1doty), indices1doty, sizeof(indices1doty), 2, texStride, texCoordOffset);
+    createVAO(coordinatesVao1y[6], coordinatesVbo1y[6], coordinatesEbo1y[6], coordinates1num2y, sizeof(coordinates1num2y), indices1num2y, sizeof(indices1num2y), 2, texStride, texCoordOffset);
+    createVAO(coordinatesVao1y[7], coordinatesVbo1y[7], coordinatesEbo1y[7], coordinates1num3y, sizeof(coordinates1num3y), indices1num3y, sizeof(indices1num3y), 2, texStride, texCoordOffset);
 
     //coordinates 2 : X
     float coordinates2x[] = {
@@ -1037,12 +770,12 @@ int main(void)
         1, 2, 3
     };
     unsigned int indices2dot1[] = {
-        0, 1, 3,
-        1, 2, 3
+        0, 3, 1,
+        1, 3, 2
     };
     unsigned int indices2dot2[] = {
-        0, 1, 3,
-        1, 2, 3
+        0, 3, 1,
+        1, 3, 2
     };
     unsigned int indices2minus[] = {
         0, 1, 3,
@@ -1053,8 +786,8 @@ int main(void)
         1, 2, 3
     };
     unsigned int indices2dot[] = {
-        0, 1, 3,
-        1, 2, 3
+        0, 3, 1,
+        1, 3, 2
     };
     unsigned int indices2num2[] = {
         0, 1, 3,
@@ -1065,113 +798,14 @@ int main(void)
         1, 2, 3
     };
     unsigned int coordinatesVao2[8], coordinatesVbo2[8], coordinatesEbo2[8];
-    glGenVertexArrays(8, coordinatesVao2);
-    glGenBuffers(8, coordinatesVbo2);
-    glGenBuffers(8, coordinatesEbo2);
-    //drone 2 x
-    glBindVertexArray(coordinatesVao2[0]);
-    glBindBuffer(GL_ARRAY_BUFFER, coordinatesVbo2[0]);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(coordinates2x), coordinates2x, GL_STATIC_DRAW);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, coordinatesEbo2[0]);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices2x), indices2x, GL_STATIC_DRAW);
-    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, stride, (void*)0);
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, (void*)(2 * sizeof(float)));
-    glEnableVertexAttribArray(1);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-    //drone 2 x dot 1
-    glBindVertexArray(coordinatesVao2[1]);
-    glBindBuffer(GL_ARRAY_BUFFER, coordinatesVbo2[1]);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(coordinates2dot1), coordinates2dot1, GL_STATIC_DRAW);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, coordinatesEbo2[1]);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices2dot1), indices2dot1, GL_STATIC_DRAW);
-    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, stride, (void*)0);
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, (void*)(2 * sizeof(float)));
-    glEnableVertexAttribArray(1);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-    //drone 2 x dot 2
-    glBindVertexArray(coordinatesVao2[2]);
-    glBindBuffer(GL_ARRAY_BUFFER, coordinatesVbo2[2]);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(coordinates2dot2), coordinates2dot2, GL_STATIC_DRAW);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, coordinatesEbo2[2]);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices2dot2), indices2dot2, GL_STATIC_DRAW);
-    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, stride, (void*)0);
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, (void*)(2 * sizeof(float)));
-    glEnableVertexAttribArray(1);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-    //drone 2 x minus
-    glBindVertexArray(coordinatesVao2[3]);
-    glBindBuffer(GL_ARRAY_BUFFER, coordinatesVbo2[3]);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(coordinates2minus), coordinates2minus, GL_STATIC_DRAW);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, coordinatesEbo2[3]);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices2minus), indices2minus, GL_STATIC_DRAW);
-    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, stride, (void*)0);
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, (void*)(2 * sizeof(float)));
-    glEnableVertexAttribArray(1);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-    //drone 2 x number 1
-    glBindVertexArray(coordinatesVao2[4]);
-    glBindBuffer(GL_ARRAY_BUFFER, coordinatesVbo2[4]);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(coordinates2num1), coordinates2num1, GL_STATIC_DRAW);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, coordinatesEbo2[4]);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices2num1), indices2num1, GL_STATIC_DRAW);
-    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, stride, (void*)0);
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, (void*)(2 * sizeof(float)));
-    glEnableVertexAttribArray(1);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-    //drone 2 x dot
-    glBindVertexArray(coordinatesVao2[5]);
-    glBindBuffer(GL_ARRAY_BUFFER, coordinatesVbo2[5]);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(coordinates2dot), coordinates2dot, GL_STATIC_DRAW);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, coordinatesEbo2[5]);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices2dot), indices2dot, GL_STATIC_DRAW);
-    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, stride, (void*)0);
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, (void*)(2 * sizeof(float)));
-    glEnableVertexAttribArray(1);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-    //drone 2 x number 2
-    glBindVertexArray(coordinatesVao2[6]);
-    glBindBuffer(GL_ARRAY_BUFFER, coordinatesVbo2[6]);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(coordinates2num2), coordinates2num2, GL_STATIC_DRAW);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, coordinatesEbo2[6]);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices2num1), indices2num1, GL_STATIC_DRAW);
-    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, stride, (void*)0);
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, (void*)(2 * sizeof(float)));
-    glEnableVertexAttribArray(1);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-    //drone 2 x number 3
-    glBindVertexArray(coordinatesVao2[7]);
-    glBindBuffer(GL_ARRAY_BUFFER, coordinatesVbo2[7]);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(coordinates2num3), coordinates2num3, GL_STATIC_DRAW);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, coordinatesEbo2[7]);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices2num1), indices2num1, GL_STATIC_DRAW);
-    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, stride, (void*)0);
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, (void*)(2 * sizeof(float)));
-    glEnableVertexAttribArray(1);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+    createVAO(coordinatesVao2[0], coordinatesVbo2[0], coordinatesEbo2[0], coordinates2x, sizeof(coordinates2x), indices2x, sizeof(indices2x), 2, texStride, texCoordOffset);
+    createVAO(coordinatesVao2[1], coordinatesVbo2[1], coordinatesEbo2[1], coordinates2dot1, sizeof(coordinates2dot1), indices2dot1, sizeof(indices2dot1), 2, texStride, texCoordOffset);
+    createVAO(coordinatesVao2[2], coordinatesVbo2[2], coordinatesEbo2[2], coordinates2dot2, sizeof(coordinates2dot2), indices2dot2, sizeof(indices2dot2), 2, texStride, texCoordOffset);
+    createVAO(coordinatesVao2[3], coordinatesVbo2[3], coordinatesEbo2[3], coordinates2minus, sizeof(coordinates2minus), indices2minus, sizeof(indices2minus), 2, texStride, texCoordOffset);
+    createVAO(coordinatesVao2[4], coordinatesVbo2[4], coordinatesEbo2[4], coordinates2num1, sizeof(coordinates2num1), indices2num1, sizeof(indices2num1), 2, texStride, texCoordOffset);
+    createVAO(coordinatesVao2[5], coordinatesVbo2[5], coordinatesEbo2[5], coordinates2dot, sizeof(coordinates2dot), indices2dot, sizeof(indices2dot), 2, texStride, texCoordOffset);
+    createVAO(coordinatesVao2[6], coordinatesVbo2[6], coordinatesEbo2[6], coordinates2num2, sizeof(coordinates2num2), indices2num2, sizeof(indices2num2), 2, texStride, texCoordOffset);
+    createVAO(coordinatesVao2[7], coordinatesVbo2[7], coordinatesEbo2[7], coordinates2num3, sizeof(coordinates2num3), indices2num3, sizeof(indices2num3), 2, texStride, texCoordOffset);
 
 
     //coordinates 2 : Y
@@ -1236,12 +870,12 @@ int main(void)
         1, 2, 3
     };
     unsigned int indices2dot1y[] = {
-        0, 1, 3,
-        1, 2, 3
+        0, 3, 1,
+        1, 3, 2
     };
     unsigned int indices2dot2y[] = {
-        0, 1, 3,
-        1, 2, 3
+        0, 3, 1,
+        1, 3, 2
     };
     unsigned int indices2minusy[] = {
         0, 1, 3,
@@ -1252,8 +886,8 @@ int main(void)
         1, 2, 3
     };
     unsigned int indices2doty[] = {
-        0, 1, 3,
-        1, 2, 3
+        0, 3, 1,
+        1, 3, 2
     };
     unsigned int indices2num2y[] = {
         0, 1, 3,
@@ -1264,113 +898,15 @@ int main(void)
         1, 2, 3
     };
     unsigned int coordinatesVao2y[8], coordinatesVbo2y[8], coordinatesEbo2y[8];
-    glGenVertexArrays(8, coordinatesVao2y);
-    glGenBuffers(8, coordinatesVbo2y);
-    glGenBuffers(8, coordinatesEbo2y);
-    //drone 2 y
-    glBindVertexArray(coordinatesVao2y[0]);
-    glBindBuffer(GL_ARRAY_BUFFER, coordinatesVbo2y[0]);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(coordinates2y), coordinates2y, GL_STATIC_DRAW);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, coordinatesEbo2y[0]);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices2y), indices2y, GL_STATIC_DRAW);
-    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, stride, (void*)0);
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, (void*)(2 * sizeof(float)));
-    glEnableVertexAttribArray(1);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-    //drone 2 y dot 1
-    glBindVertexArray(coordinatesVao2y[1]);
-    glBindBuffer(GL_ARRAY_BUFFER, coordinatesVbo2y[1]);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(coordinates2dot1y), coordinates2dot1y, GL_STATIC_DRAW);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, coordinatesEbo2y[1]);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices2dot1y), indices2dot1y, GL_STATIC_DRAW);
-    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, stride, (void*)0);
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, (void*)(2 * sizeof(float)));
-    glEnableVertexAttribArray(1);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-    //drone 2 y dot 2
-    glBindVertexArray(coordinatesVao2y[2]);
-    glBindBuffer(GL_ARRAY_BUFFER, coordinatesVbo2y[2]);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(coordinates2dot2y), coordinates2dot2y, GL_STATIC_DRAW);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, coordinatesEbo2y[2]);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices2dot2y), indices2dot2y, GL_STATIC_DRAW);
-    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, stride, (void*)0);
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, (void*)(2 * sizeof(float)));
-    glEnableVertexAttribArray(1);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-    //drone 2 y minus
-    glBindVertexArray(coordinatesVao2y[3]);
-    glBindBuffer(GL_ARRAY_BUFFER, coordinatesVbo2y[3]);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(coordinates2minusy), coordinates2minusy, GL_STATIC_DRAW);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, coordinatesEbo2y[3]);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices2minusy), indices2minusy, GL_STATIC_DRAW);
-    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, stride, (void*)0);
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, (void*)(2 * sizeof(float)));
-    glEnableVertexAttribArray(1);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-    //drone 2 y number 1
-    glBindVertexArray(coordinatesVao2y[4]);
-    glBindBuffer(GL_ARRAY_BUFFER, coordinatesVbo2y[4]);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(coordinates2num1y), coordinates2num1y, GL_STATIC_DRAW);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, coordinatesEbo2y[4]);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices2num1y), indices2num1y, GL_STATIC_DRAW);
-    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, stride, (void*)0);
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, (void*)(2 * sizeof(float)));
-    glEnableVertexAttribArray(1);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-    //drone 2 y dot
-    glBindVertexArray(coordinatesVao2y[5]);
-    glBindBuffer(GL_ARRAY_BUFFER, coordinatesVbo2y[5]);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(coordinates2doty), coordinates2doty, GL_STATIC_DRAW);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, coordinatesEbo2y[5]);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices2doty), indices2doty, GL_STATIC_DRAW);
-    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, stride, (void*)0);
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, (void*)(2 * sizeof(float)));
-    glEnableVertexAttribArray(1);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-    //drone 2 y number 2
-    glBindVertexArray(coordinatesVao2y[6]);
-    glBindBuffer(GL_ARRAY_BUFFER, coordinatesVbo2y[6]);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(coordinates2num2y), coordinates2num2y, GL_STATIC_DRAW);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, coordinatesEbo2y[6]);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices2num1y), indices2num1y, GL_STATIC_DRAW);
-    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, stride, (void*)0);
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, (void*)(2 * sizeof(float)));
-    glEnableVertexAttribArray(1);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-    //drone 2 y number 3
-    glBindVertexArray(coordinatesVao2y[7]);
-    glBindBuffer(GL_ARRAY_BUFFER, coordinatesVbo2y[7]);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(coordinates2num3y), coordinates2num3y, GL_STATIC_DRAW);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, coordinatesEbo2y[7]);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices2num1y), indices2num1y, GL_STATIC_DRAW);
-    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, stride, (void*)0);
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, (void*)(2 * sizeof(float)));
-    glEnableVertexAttribArray(1);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+    createVAO(coordinatesVao2y[0], coordinatesVbo2y[0], coordinatesEbo2y[0], coordinates2y, sizeof(coordinates2y), indices2y, sizeof(indices2y), 2, texStride, texCoordOffset);
+    createVAO(coordinatesVao2y[1], coordinatesVbo2y[1], coordinatesEbo2y[1], coordinates2dot1y, sizeof(coordinates2dot1y), indices2dot1y, sizeof(indices2dot1y), 2, texStride, texCoordOffset);
+    createVAO(coordinatesVao2y[2], coordinatesVbo2y[2], coordinatesEbo2y[2], coordinates2dot2y, sizeof(coordinates2dot2y), indices2dot2y, sizeof(indices2dot2y), 2, texStride, texCoordOffset);
+    createVAO(coordinatesVao2y[3], coordinatesVbo2y[3], coordinatesEbo2y[3], coordinates2minusy, sizeof(coordinates2minusy), indices2minusy, sizeof(indices2minusy), 2, texStride, texCoordOffset);
+    createVAO(coordinatesVao2y[4], coordinatesVbo2y[4], coordinatesEbo2y[4], coordinates2num1y, sizeof(coordinates2num1y), indices2num1y, sizeof(indices2num1y), 2, texStride, texCoordOffset);
+    createVAO(coordinatesVao2y[5], coordinatesVbo2y[5], coordinatesEbo2y[5], coordinates2doty, sizeof(coordinates2doty), indices2doty, sizeof(indices2doty), 2, texStride, texCoordOffset);
+    createVAO(coordinatesVao2y[6], coordinatesVbo2y[6], coordinatesEbo2y[6], coordinates2num2y, sizeof(coordinates2num2y), indices2num2y, sizeof(indices2num2y), 2, texStride, texCoordOffset);
+    createVAO(coordinatesVao2y[7], coordinatesVbo2y[7], coordinatesEbo2y[7], coordinates2num3y, sizeof(coordinates2num3y), indices2num3y, sizeof(indices2num3y), 2, texStride, texCoordOffset);
+
 
     // IME PREZIME I INDEKS
     float name1[] = {
@@ -1594,273 +1130,28 @@ int main(void)
         1, 2, 3
     };
     unsigned int nameVao[11], nameVbo[11], nameEbo[11];
-    glGenVertexArrays(11, nameVao);
-    glGenBuffers(11, nameVbo);
-    glGenBuffers(11, nameEbo);
+    createVAO(nameVao[0], nameVbo[0], nameEbo[0], name1, sizeof(name1), nameIndices1, sizeof(nameIndices1), 2, texStride, texCoordOffset);
+    createVAO(nameVao[1], nameVbo[1], nameEbo[1], name2, sizeof(name2), nameIndices2, sizeof(nameIndices2), 2, texStride, texCoordOffset);
+    createVAO(nameVao[2], nameVbo[2], nameEbo[2], name3, sizeof(name3), nameIndices3, sizeof(nameIndices3), 2, texStride, texCoordOffset);
+    createVAO(nameVao[3], nameVbo[3], nameEbo[3], name4, sizeof(name4), nameIndices4, sizeof(nameIndices4), 2, texStride, texCoordOffset);
+    createVAO(nameVao[4], nameVbo[4], nameEbo[4], surname1, sizeof(surname1), surnameIndices1, sizeof(surnameIndices1), 2, texStride, texCoordOffset);
+    createVAO(nameVao[5], nameVbo[5], nameEbo[5], surname2, sizeof(surname2), surnameIndices2, sizeof(surnameIndices2), 2, texStride, texCoordOffset);
+    createVAO(nameVao[6], nameVbo[6], nameEbo[6], surname3, sizeof(surname3), surnameIndices3, sizeof(surnameIndices3), 2, texStride, texCoordOffset);
+    createVAO(nameVao[7], nameVbo[7], nameEbo[7], surname4, sizeof(surname4), surnameIndices4, sizeof(surnameIndices4), 2, texStride, texCoordOffset);
+    createVAO(nameVao[8], nameVbo[8], nameEbo[8], surname5, sizeof(surname5), surnameIndices5, sizeof(surnameIndices5), 2, texStride, texCoordOffset);
+    createVAO(nameVao[9], nameVbo[9], nameEbo[9], surname6, sizeof(surname6), surnameIndices6, sizeof(surnameIndices6), 2, texStride, texCoordOffset);
+    createVAO(nameVao[10], nameVbo[10], nameEbo[10], surname7, sizeof(surname7), surnameIndices7, sizeof(surnameIndices7), 2, texStride, texCoordOffset);
+
     unsigned int indexVao[9], indexVbo[9], indexEbo[9];
-    glGenVertexArrays(9, indexVao);
-    glGenBuffers(9, indexVbo);
-    glGenBuffers(9, indexEbo);
-    //M
-    glBindVertexArray(nameVao[0]);
-    glBindBuffer(GL_ARRAY_BUFFER, nameVbo[0]);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(name1), name1, GL_STATIC_DRAW);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, nameEbo[0]);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(nameIndices1), nameIndices1, GL_STATIC_DRAW);
-    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, stride, (void*)0);
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, (void*)(2 * sizeof(float)));
-    glEnableVertexAttribArray(1);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-    //I
-    glBindVertexArray(nameVao[1]);
-    glBindBuffer(GL_ARRAY_BUFFER, nameVbo[1]);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(name2), name2, GL_STATIC_DRAW);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, nameEbo[1]);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(nameIndices2), nameIndices2, GL_STATIC_DRAW);
-    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, stride, (void*)0);
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, (void*)(2 * sizeof(float)));
-    glEnableVertexAttribArray(1);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-    //L
-    glBindVertexArray(nameVao[2]);
-    glBindBuffer(GL_ARRAY_BUFFER, nameVbo[2]);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(name3), name3, GL_STATIC_DRAW);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, nameEbo[2]);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(nameIndices3), nameIndices3, GL_STATIC_DRAW);
-    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, stride, (void*)0);
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, (void*)(2 * sizeof(float)));
-    glEnableVertexAttribArray(1);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-    //A
-    glBindVertexArray(nameVao[3]);
-    glBindBuffer(GL_ARRAY_BUFFER, nameVbo[3]);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(name4), name4, GL_STATIC_DRAW);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, nameEbo[3]);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(nameIndices4), nameIndices4, GL_STATIC_DRAW);
-    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, stride, (void*)0);
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, (void*)(2 * sizeof(float)));
-    glEnableVertexAttribArray(1);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-    //M
-    glBindVertexArray(nameVao[4]);
-    glBindBuffer(GL_ARRAY_BUFFER, nameVbo[4]);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(surname1), surname1, GL_STATIC_DRAW);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, nameEbo[4]);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(surnameIndices1), surnameIndices1, GL_STATIC_DRAW);
-    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, stride, (void*)0);
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, (void*)(2 * sizeof(float)));
-    glEnableVertexAttribArray(1);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-    //I
-    glBindVertexArray(nameVao[5]);
-    glBindBuffer(GL_ARRAY_BUFFER, nameVbo[5]);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(surname2), surname2, GL_STATIC_DRAW);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, nameEbo[5]);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(surnameIndices2), surnameIndices2, GL_STATIC_DRAW);
-    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, stride, (void*)0);
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, (void*)(2 * sizeof(float)));
-    glEnableVertexAttribArray(1);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-    //L
-    glBindVertexArray(nameVao[6]);
-    glBindBuffer(GL_ARRAY_BUFFER, nameVbo[6]);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(surname3), surname3, GL_STATIC_DRAW);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, nameEbo[6]);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(surnameIndices3), surnameIndices3, GL_STATIC_DRAW);
-    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, stride, (void*)0);
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, (void*)(2 * sizeof(float)));
-    glEnableVertexAttribArray(1);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-    //O
-    glBindVertexArray(nameVao[7]);
-    glBindBuffer(GL_ARRAY_BUFFER, nameVbo[7]);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(surname4), surname4, GL_STATIC_DRAW);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, nameEbo[7]);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(surnameIndices4), surnameIndices4, GL_STATIC_DRAW);
-    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, stride, (void*)0);
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, (void*)(2 * sizeof(float)));
-    glEnableVertexAttribArray(1);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-    //V
-    glBindVertexArray(nameVao[8]);
-    glBindBuffer(GL_ARRAY_BUFFER, nameVbo[8]);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(surname5), surname5, GL_STATIC_DRAW);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, nameEbo[8]);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(surnameIndices5), surnameIndices5, GL_STATIC_DRAW);
-    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, stride, (void*)0);
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, (void*)(2 * sizeof(float)));
-    glEnableVertexAttribArray(1);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-    //I
-    glBindVertexArray(nameVao[9]);
-    glBindBuffer(GL_ARRAY_BUFFER, nameVbo[9]);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(surname6), surname6, GL_STATIC_DRAW);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, nameEbo[9]);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(surnameIndices6), surnameIndices6, GL_STATIC_DRAW);
-    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, stride, (void*)0);
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, (void*)(2 * sizeof(float)));
-    glEnableVertexAttribArray(1);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-    //C
-    glBindVertexArray(nameVao[10]);
-    glBindBuffer(GL_ARRAY_BUFFER, nameVbo[10]);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(surname7), surname7, GL_STATIC_DRAW);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, nameEbo[10]);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(surnameIndices7), surnameIndices7, GL_STATIC_DRAW);
-    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, stride, (void*)0);
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, (void*)(2 * sizeof(float)));
-    glEnableVertexAttribArray(1);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-    //S
-    glBindVertexArray(indexVao[0]);
-    glBindBuffer(GL_ARRAY_BUFFER, indexVbo[0]);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(indeks1), indeks1, GL_STATIC_DRAW);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, indexEbo[0]);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indexIndices1), indexIndices1, GL_STATIC_DRAW);
-    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, stride, (void*)0);
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, (void*)(2 * sizeof(float)));
-    glEnableVertexAttribArray(1);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-    //V
-    glBindVertexArray(indexVao[1]);
-    glBindBuffer(GL_ARRAY_BUFFER, indexVbo[1]);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(indeks2), indeks2, GL_STATIC_DRAW);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, indexEbo[1]);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indexIndices2), indexIndices2, GL_STATIC_DRAW);
-    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, stride, (void*)0);
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, (void*)(2 * sizeof(float)));
-    glEnableVertexAttribArray(1);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-    //2
-    glBindVertexArray(indexVao[2]);
-    glBindBuffer(GL_ARRAY_BUFFER, indexVbo[2]);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(indeks3), indeks3, GL_STATIC_DRAW);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, indexEbo[2]);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indexIndices3), indexIndices3, GL_STATIC_DRAW);
-    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, stride, (void*)0);
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, (void*)(2 * sizeof(float)));
-    glEnableVertexAttribArray(1);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-    //2
-    glBindVertexArray(indexVao[3]);
-    glBindBuffer(GL_ARRAY_BUFFER, indexVbo[3]);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(indeks4), indeks4, GL_STATIC_DRAW);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, indexEbo[3]);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indexIndices4), indexIndices4, GL_STATIC_DRAW);
-    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, stride, (void*)0);
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, (void*)(2 * sizeof(float)));
-    glEnableVertexAttribArray(1);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-    //-
-    glBindVertexArray(indexVao[4]);
-    glBindBuffer(GL_ARRAY_BUFFER, indexVbo[4]);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(indeks5), indeks5, GL_STATIC_DRAW);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, indexEbo[4]);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indexIndices5), indexIndices5, GL_STATIC_DRAW);
-    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, stride, (void*)0);
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, (void*)(2 * sizeof(float)));
-    glEnableVertexAttribArray(1);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-    //2
-    glBindVertexArray(indexVao[5]);
-    glBindBuffer(GL_ARRAY_BUFFER, indexVbo[5]);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(indeks6), indeks6, GL_STATIC_DRAW);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, indexEbo[5]);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indexIndices6), indexIndices6, GL_STATIC_DRAW);
-    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, stride, (void*)0);
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, (void*)(2 * sizeof(float)));
-    glEnableVertexAttribArray(1);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-    //0
-    glBindVertexArray(indexVao[6]);
-    glBindBuffer(GL_ARRAY_BUFFER, indexVbo[6]);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(indeks7), indeks7, GL_STATIC_DRAW);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, indexEbo[6]);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indexIndices7), indexIndices7, GL_STATIC_DRAW);
-    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, stride, (void*)0);
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, (void*)(2 * sizeof(float)));
-    glEnableVertexAttribArray(1);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-    //2
-    glBindVertexArray(indexVao[7]);
-    glBindBuffer(GL_ARRAY_BUFFER, indexVbo[7]);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(indeks8), indeks8, GL_STATIC_DRAW);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, indexEbo[7]);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indexIndices8), indexIndices8, GL_STATIC_DRAW);
-    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, stride, (void*)0);
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, (void*)(2 * sizeof(float)));
-    glEnableVertexAttribArray(1);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-    //1
-    glBindVertexArray(indexVao[8]);
-    glBindBuffer(GL_ARRAY_BUFFER, indexVbo[8]);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(indeks9), indeks9, GL_STATIC_DRAW);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, indexEbo[8]);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indexIndices9), indexIndices9, GL_STATIC_DRAW);
-    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, stride, (void*)0);
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, (void*)(2 * sizeof(float)));
-    glEnableVertexAttribArray(1);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+    createVAO(indexVao[0], indexVbo[0], indexEbo[0], indeks1, sizeof(indeks1), indexIndices1, sizeof(indexIndices1), 2, texStride, texCoordOffset);
+    createVAO(indexVao[1], indexVbo[1], indexEbo[1], indeks2, sizeof(indeks2), indexIndices2, sizeof(indexIndices2), 2, texStride, texCoordOffset);
+    createVAO(indexVao[2], indexVbo[2], indexEbo[2], indeks3, sizeof(indeks3), indexIndices3, sizeof(indexIndices3), 2, texStride, texCoordOffset);
+    createVAO(indexVao[3], indexVbo[3], indexEbo[3], indeks4, sizeof(indeks4), indexIndices4, sizeof(indexIndices4), 2, texStride, texCoordOffset);
+    createVAO(indexVao[4], indexVbo[4], indexEbo[4], indeks5, sizeof(indeks5), indexIndices5, sizeof(indexIndices5), 2, texStride, texCoordOffset);
+    createVAO(indexVao[5], indexVbo[5], indexEbo[5], indeks6, sizeof(indeks6), indexIndices6, sizeof(indexIndices6), 2, texStride, texCoordOffset);
+    createVAO(indexVao[6], indexVbo[6], indexEbo[6], indeks7, sizeof(indeks7), indexIndices7, sizeof(indexIndices7), 2, texStride, texCoordOffset);
+    createVAO(indexVao[7], indexVbo[7], indexEbo[7], indeks8, sizeof(indeks8), indexIndices8, sizeof(indexIndices8), 2, texStride, texCoordOffset);
+    createVAO(indexVao[8], indexVbo[8], indexEbo[8], indeks9, sizeof(indeks9), indexIndices9, sizeof(indexIndices9), 2, texStride, texCoordOffset);
 
     //destroyed drone 1
     float destroyed11[] = {
@@ -1963,126 +1254,15 @@ int main(void)
         1, 2, 3
     };
     unsigned int destroyedVao1[9], destroyedVbo1[9], destroyedEbo1[9];
-    glGenVertexArrays(9, destroyedVao1);
-    glGenBuffers(9, destroyedVbo1);
-    glGenBuffers(9, destroyedEbo1);
-    //D
-    glBindVertexArray(destroyedVao1[0]);
-    glBindBuffer(GL_ARRAY_BUFFER, destroyedVbo1[0]);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(destroyed11), destroyed11, GL_STATIC_DRAW);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, destroyedEbo1[0]);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(destroyedindices11), destroyedindices11, GL_STATIC_DRAW);
-    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, stride, (void*)0);
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, (void*)(2 * sizeof(float)));
-    glEnableVertexAttribArray(1);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-    //E
-    glBindVertexArray(destroyedVao1[1]);
-    glBindBuffer(GL_ARRAY_BUFFER, destroyedVbo1[1]);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(destroyed12), destroyed12, GL_STATIC_DRAW);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, destroyedEbo1[1]);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(destroyedindices12), destroyedindices12, GL_STATIC_DRAW);
-    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, stride, (void*)0);
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, (void*)(2 * sizeof(float)));
-    glEnableVertexAttribArray(1);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-    //S
-    glBindVertexArray(destroyedVao1[2]);
-    glBindBuffer(GL_ARRAY_BUFFER, destroyedVbo1[2]);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(destroyed13), destroyed13, GL_STATIC_DRAW);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, destroyedEbo1[2]);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(destroyedindices13), destroyedindices13, GL_STATIC_DRAW);
-    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, stride, (void*)0);
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, (void*)(2 * sizeof(float)));
-    glEnableVertexAttribArray(1);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-    //T
-    glBindVertexArray(destroyedVao1[3]);
-    glBindBuffer(GL_ARRAY_BUFFER, destroyedVbo1[3]);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(destroyed14), destroyed14, GL_STATIC_DRAW);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, destroyedEbo1[3]);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(destroyedindices14), destroyedindices14, GL_STATIC_DRAW);
-    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, stride, (void*)0);
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, (void*)(2 * sizeof(float)));
-    glEnableVertexAttribArray(1);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-    //R
-    glBindVertexArray(destroyedVao1[4]);
-    glBindBuffer(GL_ARRAY_BUFFER, destroyedVbo1[4]);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(destroyed15), destroyed15, GL_STATIC_DRAW);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, destroyedEbo1[4]);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(destroyedindices15), destroyedindices15, GL_STATIC_DRAW);
-    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, stride, (void*)0);
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, (void*)(2 * sizeof(float)));
-    glEnableVertexAttribArray(1);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-    //O
-    glBindVertexArray(destroyedVao1[5]);
-    glBindBuffer(GL_ARRAY_BUFFER, destroyedVbo1[5]);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(destroyed16), destroyed16, GL_STATIC_DRAW);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, destroyedEbo1[5]);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(destroyedindices16), destroyedindices16, GL_STATIC_DRAW);
-    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, stride, (void*)0);
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, (void*)(2 * sizeof(float)));
-    glEnableVertexAttribArray(1);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-    //Y
-    glBindVertexArray(destroyedVao1[6]);
-    glBindBuffer(GL_ARRAY_BUFFER, destroyedVbo1[6]);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(destroyed17), destroyed17, GL_STATIC_DRAW);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, destroyedEbo1[6]);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(destroyedindices17), destroyedindices17, GL_STATIC_DRAW);
-    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, stride, (void*)0);
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, (void*)(2 * sizeof(float)));
-    glEnableVertexAttribArray(1);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-    //E
-    glBindVertexArray(destroyedVao1[7]);
-    glBindBuffer(GL_ARRAY_BUFFER, destroyedVbo1[7]);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(destroyed18), destroyed18, GL_STATIC_DRAW);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, destroyedEbo1[7]);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(destroyedindices18), destroyedindices18, GL_STATIC_DRAW);
-    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, stride, (void*)0);
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, (void*)(2 * sizeof(float)));
-    glEnableVertexAttribArray(1);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-    //D
-    glBindVertexArray(destroyedVao1[8]);
-    glBindBuffer(GL_ARRAY_BUFFER, destroyedVbo1[8]);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(destroyed11), destroyed19, GL_STATIC_DRAW);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, destroyedEbo1[8]);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(destroyedindices19), destroyedindices19, GL_STATIC_DRAW);
-    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, stride, (void*)0);
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, (void*)(2 * sizeof(float)));
-    glEnableVertexAttribArray(1);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+    createVAO(destroyedVao1[0], destroyedVbo1[0], destroyedEbo1[0], destroyed11, sizeof(destroyed11), destroyedindices11, sizeof(destroyedindices11), 2, texStride, texCoordOffset);
+    createVAO(destroyedVao1[1], destroyedVbo1[1], destroyedEbo1[1], destroyed12, sizeof(destroyed12), destroyedindices12, sizeof(destroyedindices12), 2, texStride, texCoordOffset);
+    createVAO(destroyedVao1[2], destroyedVbo1[2], destroyedEbo1[2], destroyed13, sizeof(destroyed13), destroyedindices13, sizeof(destroyedindices13), 2, texStride, texCoordOffset);
+    createVAO(destroyedVao1[3], destroyedVbo1[3], destroyedEbo1[3], destroyed14, sizeof(destroyed14), destroyedindices14, sizeof(destroyedindices14), 2, texStride, texCoordOffset);
+    createVAO(destroyedVao1[4], destroyedVbo1[4], destroyedEbo1[4], destroyed15, sizeof(destroyed15), destroyedindices15, sizeof(destroyedindices15), 2, texStride, texCoordOffset);
+    createVAO(destroyedVao1[5], destroyedVbo1[5], destroyedEbo1[5], destroyed16, sizeof(destroyed16), destroyedindices16, sizeof(destroyedindices16), 2, texStride, texCoordOffset);
+    createVAO(destroyedVao1[6], destroyedVbo1[6], destroyedEbo1[6], destroyed17, sizeof(destroyed17), destroyedindices17, sizeof(destroyedindices17), 2, texStride, texCoordOffset);
+    createVAO(destroyedVao1[7], destroyedVbo1[7], destroyedEbo1[7], destroyed18, sizeof(destroyed18), destroyedindices18, sizeof(destroyedindices18), 2, texStride, texCoordOffset);
+    createVAO(destroyedVao1[8], destroyedVbo1[8], destroyedEbo1[8], destroyed19, sizeof(destroyed19), destroyedindices19, sizeof(destroyedindices19), 2, texStride, texCoordOffset);
 
 
     //destroyed drone 1
@@ -2186,126 +1366,16 @@ int main(void)
         1, 2, 3
     };
     unsigned int destroyedVao2[9], destroyedVbo2[9], destroyedEbo2[9];
-    glGenVertexArrays(9, destroyedVao2);
-    glGenBuffers(9, destroyedVbo2);
-    glGenBuffers(9, destroyedEbo2);
-    //D
-    glBindVertexArray(destroyedVao2[0]);
-    glBindBuffer(GL_ARRAY_BUFFER, destroyedVbo2[0]);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(destroyed21), destroyed21, GL_STATIC_DRAW);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, destroyedEbo2[0]);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(destroyedindices21), destroyedindices21, GL_STATIC_DRAW);
-    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, stride, (void*)0);
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, (void*)(2 * sizeof(float)));
-    glEnableVertexAttribArray(1);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-    //E
-    glBindVertexArray(destroyedVao2[1]);
-    glBindBuffer(GL_ARRAY_BUFFER, destroyedVbo2[1]);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(destroyed22), destroyed22, GL_STATIC_DRAW);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, destroyedEbo2[1]);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(destroyedindices22), destroyedindices22, GL_STATIC_DRAW);
-    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, stride, (void*)0);
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, (void*)(2 * sizeof(float)));
-    glEnableVertexAttribArray(1);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-    //S
-    glBindVertexArray(destroyedVao2[2]);
-    glBindBuffer(GL_ARRAY_BUFFER, destroyedVbo2[2]);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(destroyed23), destroyed23, GL_STATIC_DRAW);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, destroyedEbo2[2]);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(destroyedindices23), destroyedindices23, GL_STATIC_DRAW);
-    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, stride, (void*)0);
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, (void*)(2 * sizeof(float)));
-    glEnableVertexAttribArray(1);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-    //T
-    glBindVertexArray(destroyedVao2[3]);
-    glBindBuffer(GL_ARRAY_BUFFER, destroyedVbo2[3]);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(destroyed24), destroyed24, GL_STATIC_DRAW);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, destroyedEbo2[3]);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(destroyedindices24), destroyedindices24, GL_STATIC_DRAW);
-    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, stride, (void*)0);
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, (void*)(2 * sizeof(float)));
-    glEnableVertexAttribArray(1);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-    //R
-    glBindVertexArray(destroyedVao2[4]);
-    glBindBuffer(GL_ARRAY_BUFFER, destroyedVbo2[4]);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(destroyed25), destroyed25, GL_STATIC_DRAW);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, destroyedEbo2[4]);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(destroyedindices25), destroyedindices25, GL_STATIC_DRAW);
-    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, stride, (void*)0);
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, (void*)(2 * sizeof(float)));
-    glEnableVertexAttribArray(1);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-    //O
-    glBindVertexArray(destroyedVao2[5]);
-    glBindBuffer(GL_ARRAY_BUFFER, destroyedVbo2[5]);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(destroyed26), destroyed26, GL_STATIC_DRAW);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, destroyedEbo2[5]);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(destroyedindices26), destroyedindices26, GL_STATIC_DRAW);
-    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, stride, (void*)0);
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, (void*)(2 * sizeof(float)));
-    glEnableVertexAttribArray(1);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-    //Y
-    glBindVertexArray(destroyedVao2[6]);
-    glBindBuffer(GL_ARRAY_BUFFER, destroyedVbo2[6]);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(destroyed27), destroyed27, GL_STATIC_DRAW);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, destroyedEbo2[6]);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(destroyedindices27), destroyedindices27, GL_STATIC_DRAW);
-    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, stride, (void*)0);
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, (void*)(2 * sizeof(float)));
-    glEnableVertexAttribArray(1);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-    //E
-    glBindVertexArray(destroyedVao2[7]);
-    glBindBuffer(GL_ARRAY_BUFFER, destroyedVbo2[7]);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(destroyed28), destroyed28, GL_STATIC_DRAW);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, destroyedEbo2[7]);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(destroyedindices28), destroyedindices28, GL_STATIC_DRAW);
-    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, stride, (void*)0);
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, (void*)(2 * sizeof(float)));
-    glEnableVertexAttribArray(1);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-    //D
-    glBindVertexArray(destroyedVao2[8]);
-    glBindBuffer(GL_ARRAY_BUFFER, destroyedVbo2[8]);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(destroyed21), destroyed29, GL_STATIC_DRAW);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, destroyedEbo2[8]);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(destroyedindices29), destroyedindices29, GL_STATIC_DRAW);
-    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, stride, (void*)0);
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, (void*)(2 * sizeof(float)));
-    glEnableVertexAttribArray(1);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+    createVAO(destroyedVao2[0], destroyedVbo2[0], destroyedEbo2[0], destroyed21, sizeof(destroyed21), destroyedindices21, sizeof(destroyedindices21), 2, texStride, texCoordOffset);
+    createVAO(destroyedVao2[1], destroyedVbo2[1], destroyedEbo2[1], destroyed22, sizeof(destroyed22), destroyedindices22, sizeof(destroyedindices22), 2, texStride, texCoordOffset);
+    createVAO(destroyedVao2[2], destroyedVbo2[2], destroyedEbo2[2], destroyed23, sizeof(destroyed23), destroyedindices23, sizeof(destroyedindices23), 2, texStride, texCoordOffset);
+    createVAO(destroyedVao2[3], destroyedVbo2[3], destroyedEbo2[3], destroyed24, sizeof(destroyed24), destroyedindices24, sizeof(destroyedindices24), 2, texStride, texCoordOffset);
+    createVAO(destroyedVao2[4], destroyedVbo2[4], destroyedEbo2[4], destroyed25, sizeof(destroyed25), destroyedindices25, sizeof(destroyedindices25), 2, texStride, texCoordOffset);
+    createVAO(destroyedVao2[5], destroyedVbo2[5], destroyedEbo2[5], destroyed26, sizeof(destroyed26), destroyedindices26, sizeof(destroyedindices26), 2, texStride, texCoordOffset);
+    createVAO(destroyedVao2[6], destroyedVbo2[6], destroyedEbo2[6], destroyed27, sizeof(destroyed27), destroyedindices27, sizeof(destroyedindices27), 2, texStride, texCoordOffset);
+    createVAO(destroyedVao2[7], destroyedVbo2[7], destroyedEbo2[7], destroyed28, sizeof(destroyed28), destroyedindices28, sizeof(destroyedindices28), 2, texStride, texCoordOffset);
+    createVAO(destroyedVao2[8], destroyedVbo2[8], destroyedEbo2[8], destroyed29, sizeof(destroyed29), destroyedindices29, sizeof(destroyedindices29), 2, texStride, texCoordOffset);
+
 
     //led
     float ledVertices[] =
@@ -2329,333 +1399,35 @@ int main(void)
     glBindVertexArray(0);
 
 
+    // textures
+    unsigned texture1 = loadAndConfigureTexture("res/1.png", textureShader, "uTex", 0);
+    unsigned texture2 = loadAndConfigureTexture("res/2.png", textureShader, "uTex", 0);
+    unsigned texture3 = loadAndConfigureTexture("res/3.png", textureShader, "uTex", 0);
+    unsigned texture4 = loadAndConfigureTexture("res/4.png", textureShader, "uTex", 0);
+    unsigned texture5 = loadAndConfigureTexture("res/5.png", textureShader, "uTex", 0);
+    unsigned texture6 = loadAndConfigureTexture("res/6.png", textureShader, "uTex", 0);
+    unsigned texture7 = loadAndConfigureTexture("res/7.png", textureShader, "uTex", 0);
+    unsigned texture8 = loadAndConfigureTexture("res/8.png", textureShader, "uTex", 0);
+    unsigned texture9 = loadAndConfigureTexture("res/9.png", textureShader, "uTex", 0);
+    unsigned texture0 = loadAndConfigureTexture("res/0.png", textureShader, "uTex", 0);
+    unsigned textureX = loadAndConfigureTexture("res/x.png", textureShader, "uTex", 0);
+    unsigned textureY = loadAndConfigureTexture("res/y.png", textureShader, "uTex", 0);
+    unsigned textureDot = loadAndConfigureTexture("res/dot.png", textureShader, "uTex", 0);
+    unsigned textureMinus = loadAndConfigureTexture("res/minus.png", textureShader, "uTex", 0);
+    unsigned textureM = loadAndConfigureTexture("res/m.png", textureShader, "uTex", 0);
+    unsigned textureI = loadAndConfigureTexture("res/i.png", textureShader, "uTex", 0);
+    unsigned textureL = loadAndConfigureTexture("res/l.png", textureShader, "uTex", 0);
+    unsigned textureA = loadAndConfigureTexture("res/a.png", textureShader, "uTex", 0);
+    unsigned textureO = loadAndConfigureTexture("res/o.png", textureShader, "uTex", 0);
+    unsigned textureV = loadAndConfigureTexture("res/v.png", textureShader, "uTex", 0);
+    unsigned textureC = loadAndConfigureTexture("res/c.png", textureShader, "uTex", 0);
+    unsigned textureS = loadAndConfigureTexture("res/s.png", textureShader, "uTex", 0);
+    unsigned textureD = loadAndConfigureTexture("res/d.png", textureShader, "uTex", 0);
+    unsigned textureE = loadAndConfigureTexture("res/e.png", textureShader, "uTex", 0);
+    unsigned textureT = loadAndConfigureTexture("res/t.png", textureShader, "uTex", 0);
+    unsigned textureR = loadAndConfigureTexture("res/r.png", textureShader, "uTex", 0);
+    unsigned mapTexture = loadAndConfigureTexture("res/majevica.jpg", mapShader, "uTex", 0);
 
-
-    // 1 texture
-    unsigned texture1 = loadImageToTexture("res/1.png");
-    glBindTexture(GL_TEXTURE_2D, texture1);
-    glGenerateMipmap(GL_TEXTURE_2D);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    glBindTexture(GL_TEXTURE_2D, 0);
-    glUseProgram(textureShader);
-    unsigned uTexLoc = glGetUniformLocation(textureShader, "uTex");
-    glUniform1i(uTexLoc, 0);
-    glUseProgram(0);
-    // 2 texture
-    unsigned texture2 = loadImageToTexture("res/2.png");
-    glBindTexture(GL_TEXTURE_2D, texture2);
-    glGenerateMipmap(GL_TEXTURE_2D);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    glBindTexture(GL_TEXTURE_2D, 0);
-    glUseProgram(textureShader);
-    glUniform1i(uTexLoc, 0);
-    glUseProgram(0);
-    // 3 texture
-    unsigned texture3 = loadImageToTexture("res/3.png");
-    glBindTexture(GL_TEXTURE_2D, texture3);
-    glGenerateMipmap(GL_TEXTURE_2D);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    glBindTexture(GL_TEXTURE_2D, 0);
-    glUseProgram(textureShader);
-    glUniform1i(uTexLoc, 0);
-    glUseProgram(0);
-    // 4 texture
-    unsigned texture4 = loadImageToTexture("res/4.png");
-    glBindTexture(GL_TEXTURE_2D, texture4);
-    glGenerateMipmap(GL_TEXTURE_2D);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    glBindTexture(GL_TEXTURE_2D, 0);
-    glUseProgram(textureShader);
-    glUniform1i(uTexLoc, 0);
-    glUseProgram(0);
-    // 5 texture
-    unsigned texture5 = loadImageToTexture("res/5.png");
-    glBindTexture(GL_TEXTURE_2D, texture5);
-    glGenerateMipmap(GL_TEXTURE_2D);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    glBindTexture(GL_TEXTURE_2D, 0);
-    glUseProgram(textureShader);
-    glUniform1i(uTexLoc, 0);
-    glUseProgram(0);
-    // 6 texture
-    unsigned texture6 = loadImageToTexture("res/6.png");
-    glBindTexture(GL_TEXTURE_2D, texture6);
-    glGenerateMipmap(GL_TEXTURE_2D);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    glBindTexture(GL_TEXTURE_2D, 0);
-    glUseProgram(textureShader);
-    glUniform1i(uTexLoc, 0);
-    glUseProgram(0);
-    // 7 texture
-    unsigned texture7 = loadImageToTexture("res/7.png");
-    glBindTexture(GL_TEXTURE_2D, texture7);
-    glGenerateMipmap(GL_TEXTURE_2D);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    glBindTexture(GL_TEXTURE_2D, 0);
-    glUseProgram(textureShader);
-    glUniform1i(uTexLoc, 0);
-    glUseProgram(0);
-    // 8 texture
-    unsigned texture8 = loadImageToTexture("res/8.png");
-    glBindTexture(GL_TEXTURE_2D, texture8);
-    glGenerateMipmap(GL_TEXTURE_2D);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    glBindTexture(GL_TEXTURE_2D, 0);
-    glUseProgram(textureShader);
-    glUniform1i(uTexLoc, 0);
-    glUseProgram(0);
-    // 9 texture
-    unsigned texture9 = loadImageToTexture("res/9.png");
-    glBindTexture(GL_TEXTURE_2D, texture9);
-    glGenerateMipmap(GL_TEXTURE_2D);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    glBindTexture(GL_TEXTURE_2D, 0);
-    glUseProgram(textureShader);
-    glUniform1i(uTexLoc, 0);
-    glUseProgram(0);
-    // 0 texture
-    unsigned texture0 = loadImageToTexture("res/0.png");
-    glBindTexture(GL_TEXTURE_2D, texture0);
-    glGenerateMipmap(GL_TEXTURE_2D);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    glBindTexture(GL_TEXTURE_2D, 0);
-    glUseProgram(textureShader);
-    glUniform1i(uTexLoc, 0);
-    glUseProgram(0);
-    // x texture
-    unsigned texturex = loadImageToTexture("res/x.png");
-    glBindTexture(GL_TEXTURE_2D, texturex);
-    glGenerateMipmap(GL_TEXTURE_2D);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    glBindTexture(GL_TEXTURE_2D, 0);
-    glUseProgram(textureShader);
-    glUniform1i(uTexLoc, 0);
-    glUseProgram(0);
-    // y texture
-    unsigned texturey = loadImageToTexture("res/y.png");
-    glBindTexture(GL_TEXTURE_2D, texturey);
-    glGenerateMipmap(GL_TEXTURE_2D);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    glBindTexture(GL_TEXTURE_2D, 0);
-    glUseProgram(textureShader);
-    glUniform1i(uTexLoc, 0);
-    glUseProgram(0);
-    // dot texture
-    unsigned textureDot = loadImageToTexture("res/dot.png");
-    glBindTexture(GL_TEXTURE_2D, textureDot);
-    glGenerateMipmap(GL_TEXTURE_2D);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    glBindTexture(GL_TEXTURE_2D, 0);
-    glUseProgram(textureShader);
-    glUniform1i(uTexLoc, 0);
-    glUseProgram(0);
-    // minus texture
-    unsigned textureMinus = loadImageToTexture("res/minus.png");
-    glBindTexture(GL_TEXTURE_2D, textureMinus);
-    glGenerateMipmap(GL_TEXTURE_2D);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    glBindTexture(GL_TEXTURE_2D, 0);
-    glUseProgram(textureShader);
-    glUniform1i(uTexLoc, 0);
-    glUseProgram(0);
-    // m texture
-    unsigned texturem = loadImageToTexture("res/m.png");
-    glBindTexture(GL_TEXTURE_2D, texturem);
-    glGenerateMipmap(GL_TEXTURE_2D);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    glBindTexture(GL_TEXTURE_2D, 0);
-    glUseProgram(textureShader);
-    glUniform1i(uTexLoc, 0);
-    glUseProgram(0);
-    // i texture
-    unsigned texturei = loadImageToTexture("res/i.png");
-    glBindTexture(GL_TEXTURE_2D, texturei);
-    glGenerateMipmap(GL_TEXTURE_2D);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    glBindTexture(GL_TEXTURE_2D, 0);
-    glUseProgram(textureShader);
-    glUniform1i(uTexLoc, 0);
-    glUseProgram(0);
-    // l texture
-    unsigned texturel = loadImageToTexture("res/l.png");
-    glBindTexture(GL_TEXTURE_2D, texturel);
-    glGenerateMipmap(GL_TEXTURE_2D);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    glBindTexture(GL_TEXTURE_2D, 0);
-    glUseProgram(textureShader);
-    glUniform1i(uTexLoc, 0);
-    glUseProgram(0);
-    // a texture
-    unsigned texturea = loadImageToTexture("res/a.png");
-    glBindTexture(GL_TEXTURE_2D, texturea);
-    glGenerateMipmap(GL_TEXTURE_2D);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    glBindTexture(GL_TEXTURE_2D, 0);
-    glUseProgram(textureShader);
-    glUniform1i(uTexLoc, 0);
-    glUseProgram(0);
-    // o texture
-    unsigned textureo = loadImageToTexture("res/o.png");
-    glBindTexture(GL_TEXTURE_2D, textureo);
-    glGenerateMipmap(GL_TEXTURE_2D);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    glBindTexture(GL_TEXTURE_2D, 0);
-    glUseProgram(textureShader);
-    glUniform1i(uTexLoc, 0);
-    glUseProgram(0);
-    // v texture
-    unsigned texturev = loadImageToTexture("res/v.png");
-    glBindTexture(GL_TEXTURE_2D, texturev);
-    glGenerateMipmap(GL_TEXTURE_2D);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    glBindTexture(GL_TEXTURE_2D, 0);
-    glUseProgram(textureShader);
-    glUniform1i(uTexLoc, 0);
-    glUseProgram(0);
-    // c texture
-    unsigned texturec = loadImageToTexture("res/c.png");
-    glBindTexture(GL_TEXTURE_2D, texturec);
-    glGenerateMipmap(GL_TEXTURE_2D);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    glBindTexture(GL_TEXTURE_2D, 0);
-    glUseProgram(textureShader);
-    glUniform1i(uTexLoc, 0);
-    glUseProgram(0);
-    // s texture
-    unsigned textures = loadImageToTexture("res/s.png");
-    glBindTexture(GL_TEXTURE_2D, textures);
-    glGenerateMipmap(GL_TEXTURE_2D);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    glBindTexture(GL_TEXTURE_2D, 0);
-    glUseProgram(textureShader);
-    glUniform1i(uTexLoc, 0);
-    glUseProgram(0);
-    // d texture
-    unsigned textured = loadImageToTexture("res/d.png");
-    glBindTexture(GL_TEXTURE_2D, textured);
-    glGenerateMipmap(GL_TEXTURE_2D);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    glBindTexture(GL_TEXTURE_2D, 0);
-    glUseProgram(textureShader);
-    glUniform1i(uTexLoc, 0);
-    glUseProgram(0);
-    // e texture
-    unsigned texturee = loadImageToTexture("res/e.png");
-    glBindTexture(GL_TEXTURE_2D, texturee);
-    glGenerateMipmap(GL_TEXTURE_2D);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    glBindTexture(GL_TEXTURE_2D, 0);
-    glUseProgram(textureShader);
-    glUniform1i(uTexLoc, 0);
-    glUseProgram(0);
-    // t texture
-    unsigned texturet = loadImageToTexture("res/t.png");
-    glBindTexture(GL_TEXTURE_2D, texturet);
-    glGenerateMipmap(GL_TEXTURE_2D);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    glBindTexture(GL_TEXTURE_2D, 0);
-    glUseProgram(textureShader);
-    glUniform1i(uTexLoc, 0);
-    glUseProgram(0);
-    // r texture
-    unsigned texturer = loadImageToTexture("res/r.png");
-    glBindTexture(GL_TEXTURE_2D, texturer);
-    glGenerateMipmap(GL_TEXTURE_2D);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    glBindTexture(GL_TEXTURE_2D, 0);
-    glUseProgram(textureShader);
-    glUniform1i(uTexLoc, 0);
-    glUseProgram(0);
-    //map texture
-    unsigned mapTexture = loadImageToTexture("res/majevica.jpg");
-    glBindTexture(GL_TEXTURE_2D, mapTexture);
-    glGenerateMipmap(GL_TEXTURE_2D);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    glBindTexture(GL_TEXTURE_2D, 0);
-    glUseProgram(textureShader);
-    glUniform1i(uTexLoc, 0);
-    glUseProgram(0);
 
 
     // ++++++++++++++++++++++++++++++++++++++++++++++++++++++            UNIFORME            +++++++++++++++++++++++++++++++++++++++++++++++++
@@ -2923,7 +1695,7 @@ int main(void)
         shaderProgram.setMat4("model", glm::mat4(1.0f));
 
         //map texture
-        glUseProgram(textureShader);
+        glUseProgram(mapShader);
         glActiveTexture(GL_TEXTURE0);
         glBindTexture(GL_TEXTURE_2D, mapTexture);
         glBindVertexArray(VAO);
@@ -2994,307 +1766,19 @@ int main(void)
         glDrawElements(GL_TRIANGLES, 12, GL_UNSIGNED_INT, 0);
 
 
-        int hundreds, tens, ones;
-        int battery = static_cast<int>(round(drone1.batteryLevel));
-        hundreds = battery / 100;
-        tens = (battery / 10) % 10;
-        ones = battery % 10;
-
-        // Draw hundreds digit for Drone 1
         glUseProgram(textureShader);
-        switch (hundreds) {
-        case 0: {
-            break;
-        }
-        case 1: {
-            glBindTexture(GL_TEXTURE_2D, texture1);
-            break;
-        }
-        case 2: {
-            glBindTexture(GL_TEXTURE_2D, texture2);
-            break;
-        }
-        case 3: {
-            glBindTexture(GL_TEXTURE_2D, texture3);
-            break;
-        }
-        case 4: {
-            glBindTexture(GL_TEXTURE_2D, texture4);
-            break;
-        }
-        case 5: {
-            glBindTexture(GL_TEXTURE_2D, texture5);
-            break;
-        }
-        case 6: {
-            glBindTexture(GL_TEXTURE_2D, texture6);
-            break;
-        }
-        case 7: {
-            glBindTexture(GL_TEXTURE_2D, texture7);
-            break;
-        }
-        case 8: {
-            glBindTexture(GL_TEXTURE_2D, texture8);
-            break;
-        }
-        case 9: {
-            glBindTexture(GL_TEXTURE_2D, texture9);
-            break;
-        }
-        default: glBindTexture(GL_TEXTURE_2D, texture0); // Fallback, should not occur
-        }
-        if (hundreds != 0) {
-            glBindVertexArray(batteryVao1[0]);
-            glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
-        }
-        // Draw tens digit for Drone 1
-        switch (tens) {
-        case 0: {
-            glBindTexture(GL_TEXTURE_2D, texture0);
-            break;
-        }
-        case 1: {
-            glBindTexture(GL_TEXTURE_2D, texture1);
-            break;
-        }
-        case 2: {
-            glBindTexture(GL_TEXTURE_2D, texture2);
-            break;
-        }
-        case 3: {
-            glBindTexture(GL_TEXTURE_2D, texture3);
-            break;
-        }
-        case 4: {
-            glBindTexture(GL_TEXTURE_2D, texture4);
-            break;
-        }
-        case 5: {
-            glBindTexture(GL_TEXTURE_2D, texture5);
-            break;
-        }
-        case 6: {
-            glBindTexture(GL_TEXTURE_2D, texture6);
-            break;
-        }
-        case 7: {
-            glBindTexture(GL_TEXTURE_2D, texture7);
-            break;
-        }
-        case 8: {
-            glBindTexture(GL_TEXTURE_2D, texture8);
-            break;
-        }
-        case 9: {
-            glBindTexture(GL_TEXTURE_2D, texture9);
-            break;
-        }
-        default: glBindTexture(GL_TEXTURE_2D, texture0); // Fallback, should not occur
-        }
-        glBindVertexArray(batteryVao1[1]);
-        glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
 
-        // Draw ones digit for Drone 1
-        switch (ones) {
-        case 0: {
-            glBindTexture(GL_TEXTURE_2D, texture0);
-            break;
-        }
-        case 1: {
-            glBindTexture(GL_TEXTURE_2D, texture1);
-            break;
-        }
-        case 2: {
-            glBindTexture(GL_TEXTURE_2D, texture2);
-            break;
-        }
-        case 3: {
-            glBindTexture(GL_TEXTURE_2D, texture3);
-            break;
-        }
-        case 4: {
-            glBindTexture(GL_TEXTURE_2D, texture4);
-            break;
-        }
-        case 5: {
-            glBindTexture(GL_TEXTURE_2D, texture5);
-            break;
-        }
-        case 6: {
-            glBindTexture(GL_TEXTURE_2D, texture6);
-            break;
-        }
-        case 7: {
-            glBindTexture(GL_TEXTURE_2D, texture7);
-            break;
-        }
-        case 8: {
-            glBindTexture(GL_TEXTURE_2D, texture8);
-            break;
-        }
-        case 9: {
-            glBindTexture(GL_TEXTURE_2D, texture9);
-            break;
-        }
-        default: glBindTexture(GL_TEXTURE_2D, texture0); // Fallback, should not occur
-        }
-        glBindVertexArray(batteryVao1[2]);
-        glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+        // battery level for drone 1
+        int battery1 = static_cast<int>(round(drone1.batteryLevel));
+        drawBattery(battery1, texture0, texture1, texture2, texture3, texture4, texture5, texture6, texture7, texture8, texture9, batteryVao1);
 
         // Process battery level for Drone 2
-        battery = static_cast<int>(round(drone2.batteryLevel));
-        hundreds = battery / 100;
-        tens = (battery / 10) % 10;
-        ones = battery % 10;
-
-        // Draw hundreds digit for Drone 2
-        switch (hundreds) {
-        case 0: {
-            //glBindTexture(GL_TEXTURE_2D, texture0);
-            break;
-        }
-        case 1: {
-            glBindTexture(GL_TEXTURE_2D, texture1);
-            break;
-        }
-        case 2: {
-            glBindTexture(GL_TEXTURE_2D, texture2);
-            break;
-        }
-        case 3: {
-            glBindTexture(GL_TEXTURE_2D, texture3);
-            break;
-        }
-        case 4: {
-            glBindTexture(GL_TEXTURE_2D, texture4);
-            break;
-        }
-        case 5: {
-            glBindTexture(GL_TEXTURE_2D, texture5);
-            break;
-        }
-        case 6: {
-            glBindTexture(GL_TEXTURE_2D, texture6);
-            break;
-        }
-        case 7: {
-            glBindTexture(GL_TEXTURE_2D, texture7);
-            break;
-        }
-        case 8: {
-            glBindTexture(GL_TEXTURE_2D, texture8);
-            break;
-        }
-        case 9: {
-            glBindTexture(GL_TEXTURE_2D, texture9);
-            break;
-        }
-        default: glBindTexture(GL_TEXTURE_2D, texture0); // Fallback, should not occur
-        }
-
-        if (hundreds != 0) {
-            glBindVertexArray(batteryVao2[0]);
-            glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
-        }
-
-        // Draw tens digit for Drone 2
-        switch (tens) {
-        case 0: {
-            glBindTexture(GL_TEXTURE_2D, texture0);
-            break;
-        }
-        case 1: {
-            glBindTexture(GL_TEXTURE_2D, texture1);
-            break;
-        }
-        case 2: {
-            glBindTexture(GL_TEXTURE_2D, texture2);
-            break;
-        }
-        case 3: {
-            glBindTexture(GL_TEXTURE_2D, texture3);
-            break;
-        }
-        case 4: {
-            glBindTexture(GL_TEXTURE_2D, texture4);
-            break;
-        }
-        case 5: {
-            glBindTexture(GL_TEXTURE_2D, texture5);
-            break;
-        }
-        case 6: {
-            glBindTexture(GL_TEXTURE_2D, texture6);
-            break;
-        }
-        case 7: {
-            glBindTexture(GL_TEXTURE_2D, texture7);
-            break;
-        }
-        case 8: {
-            glBindTexture(GL_TEXTURE_2D, texture8);
-            break;
-        }
-        case 9: {
-            glBindTexture(GL_TEXTURE_2D, texture9);
-            break;
-        }
-        default: glBindTexture(GL_TEXTURE_2D, texture0); // Fallback, should not occur
-        }
-        glBindVertexArray(batteryVao2[1]);
-        glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
-
-        // Draw ones digit for Drone 2
-        switch (ones) {
-        case 0: {
-            glBindTexture(GL_TEXTURE_2D, texture0);
-            break;
-        }
-        case 1: {
-            glBindTexture(GL_TEXTURE_2D, texture1);
-            break;
-        }
-        case 2: {
-            glBindTexture(GL_TEXTURE_2D, texture2);
-            break;
-        }
-        case 3: {
-            glBindTexture(GL_TEXTURE_2D, texture3);
-            break;
-        }
-        case 4: {
-            glBindTexture(GL_TEXTURE_2D, texture4);
-            break;
-        }
-        case 5: {
-            glBindTexture(GL_TEXTURE_2D, texture5);
-            break;
-        }
-        case 6: {
-            glBindTexture(GL_TEXTURE_2D, texture6);
-            break;
-        }
-        case 7: {
-            glBindTexture(GL_TEXTURE_2D, texture7);
-            break;
-        }
-        case 8: {
-            glBindTexture(GL_TEXTURE_2D, texture8);
-            break;
-        }
-        case 9: {
-            glBindTexture(GL_TEXTURE_2D, texture9);
-            break;
-        }
-        default: glBindTexture(GL_TEXTURE_2D, texture0); // Fallback, should not occur
-        }
-        glBindVertexArray(batteryVao2[2]);
-        glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+        int battery2 = static_cast<int>(round(drone2.batteryLevel));
+        drawBattery(battery2, texture0, texture1, texture2, texture3, texture4, texture5, texture6, texture7, texture8, texture9, batteryVao2);
 
         //coordinates
         // x for drone 1
-        glBindTexture(GL_TEXTURE_2D, texturex);
+        glBindTexture(GL_TEXTURE_2D, textureX);
         glBindVertexArray(coordinatesVao1[0]);
         glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
         // : for x for drone 1
@@ -3336,101 +1820,12 @@ int main(void)
             int precise = static_cast<int>(round(scaledX));
             int first = (precise / 10) % 10;
             int second = precise % 10;
-            switch (first) {
-            case 0: {
-                glBindTexture(GL_TEXTURE_2D, texture0);
-                break;
-            }
-            case 1: {
-                glBindTexture(GL_TEXTURE_2D, texture1);
-                break;
-            }
-            case 2: {
-                glBindTexture(GL_TEXTURE_2D, texture2);
-                break;
-            }
-            case 3: {
-                glBindTexture(GL_TEXTURE_2D, texture3);
-                break;
-            }
-            case 4: {
-                glBindTexture(GL_TEXTURE_2D, texture4);
-                break;
-            }
-            case 5: {
-                glBindTexture(GL_TEXTURE_2D, texture5);
-                break;
-            }
-            case 6: {
-                glBindTexture(GL_TEXTURE_2D, texture6);
-                break;
-            }
-            case 7: {
-                glBindTexture(GL_TEXTURE_2D, texture7);
-                break;
-            }
-            case 8: {
-                glBindTexture(GL_TEXTURE_2D, texture8);
-                break;
-            }
-            case 9: {
-                glBindTexture(GL_TEXTURE_2D, texture9);
-                break;
-            }
-            default: glBindTexture(GL_TEXTURE_2D, texture0); // Fallback, should not occur
-            }
-            glBindVertexArray(coordinatesVao1[6]);
-            glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
-            // num3 for x for drone 1
-            switch (second) {
-            case 0: {
-                glBindTexture(GL_TEXTURE_2D, texture0);
-                break;
-            }
-            case 1: {
-                glBindTexture(GL_TEXTURE_2D, texture1);
-                break;
-            }
-            case 2: {
-                glBindTexture(GL_TEXTURE_2D, texture2);
-                break;
-            }
-            case 3: {
-                glBindTexture(GL_TEXTURE_2D, texture3);
-                break;
-            }
-            case 4: {
-                glBindTexture(GL_TEXTURE_2D, texture4);
-                break;
-            }
-            case 5: {
-                glBindTexture(GL_TEXTURE_2D, texture5);
-                break;
-            }
-            case 6: {
-                glBindTexture(GL_TEXTURE_2D, texture6);
-                break;
-            }
-            case 7: {
-                glBindTexture(GL_TEXTURE_2D, texture7);
-                break;
-            }
-            case 8: {
-                glBindTexture(GL_TEXTURE_2D, texture8);
-                break;
-            }
-            case 9: {
-                glBindTexture(GL_TEXTURE_2D, texture9);
-                break;
-            }
-            default: glBindTexture(GL_TEXTURE_2D, texture0); // Fallback, should not occur
-            }
-            glBindVertexArray(coordinatesVao1[7]);
-            glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+            drawDigit(6, first, texture0, texture1, texture2, texture3, texture4, texture5, texture6, texture7, texture8, texture9, coordinatesVao1);
+            drawDigit(7, second, texture0, texture1, texture2, texture3, texture4, texture5, texture6, texture7, texture8, texture9, coordinatesVao1);
         }
 
         // y for drone 1
-        glBindTexture(GL_TEXTURE_2D, texturey);
+        glBindTexture(GL_TEXTURE_2D, textureY);
         glBindVertexArray(coordinatesVao1y[0]);
         glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
         // : for y for drone 1
@@ -3472,101 +1867,12 @@ int main(void)
             int precise = static_cast<int>(round(scaledY));
             int first = (precise / 10) % 10;
             int second = precise % 10;
-            switch (first) {
-            case 0: {
-                glBindTexture(GL_TEXTURE_2D, texture0);
-                break;
-            }
-            case 1: {
-                glBindTexture(GL_TEXTURE_2D, texture1);
-                break;
-            }
-            case 2: {
-                glBindTexture(GL_TEXTURE_2D, texture2);
-                break;
-            }
-            case 3: {
-                glBindTexture(GL_TEXTURE_2D, texture3);
-                break;
-            }
-            case 4: {
-                glBindTexture(GL_TEXTURE_2D, texture4);
-                break;
-            }
-            case 5: {
-                glBindTexture(GL_TEXTURE_2D, texture5);
-                break;
-            }
-            case 6: {
-                glBindTexture(GL_TEXTURE_2D, texture6);
-                break;
-            }
-            case 7: {
-                glBindTexture(GL_TEXTURE_2D, texture7);
-                break;
-            }
-            case 8: {
-                glBindTexture(GL_TEXTURE_2D, texture8);
-                break;
-            }
-            case 9: {
-                glBindTexture(GL_TEXTURE_2D, texture9);
-                break;
-            }
-            default: glBindTexture(GL_TEXTURE_2D, texture0); // Fallback, should not occur
-            }
-            glBindVertexArray(coordinatesVao1y[6]);
-            glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
-            // num3 for x for drone 1
-            switch (second) {
-            case 0: {
-                glBindTexture(GL_TEXTURE_2D, texture0);
-                break;
-            }
-            case 1: {
-                glBindTexture(GL_TEXTURE_2D, texture1);
-                break;
-            }
-            case 2: {
-                glBindTexture(GL_TEXTURE_2D, texture2);
-                break;
-            }
-            case 3: {
-                glBindTexture(GL_TEXTURE_2D, texture3);
-                break;
-            }
-            case 4: {
-                glBindTexture(GL_TEXTURE_2D, texture4);
-                break;
-            }
-            case 5: {
-                glBindTexture(GL_TEXTURE_2D, texture5);
-                break;
-            }
-            case 6: {
-                glBindTexture(GL_TEXTURE_2D, texture6);
-                break;
-            }
-            case 7: {
-                glBindTexture(GL_TEXTURE_2D, texture7);
-                break;
-            }
-            case 8: {
-                glBindTexture(GL_TEXTURE_2D, texture8);
-                break;
-            }
-            case 9: {
-                glBindTexture(GL_TEXTURE_2D, texture9);
-                break;
-            }
-            default: glBindTexture(GL_TEXTURE_2D, texture0); // Fallback, should not occur
-            }
-            glBindVertexArray(coordinatesVao1y[7]);
-            glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+            drawDigit(6, first, texture0, texture1, texture2, texture3, texture4, texture5, texture6, texture7, texture8, texture9, coordinatesVao1y);
+            drawDigit(7, second, texture0, texture1, texture2, texture3, texture4, texture5, texture6, texture7, texture8, texture9, coordinatesVao1y);
         }
 
         // x for drone 2
-        glBindTexture(GL_TEXTURE_2D, texturex);
+        glBindTexture(GL_TEXTURE_2D, textureX);
         glBindVertexArray(coordinatesVao2[0]);
         glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
         glBindVertexArray(0);
@@ -3609,101 +1915,13 @@ int main(void)
             int precise = static_cast<int>(round(scaledX));
             int first = (precise / 10) % 10;
             int second = precise % 10;
-            switch (first) {
-            case 0: {
-                glBindTexture(GL_TEXTURE_2D, texture0);
-                break;
-            }
-            case 1: {
-                glBindTexture(GL_TEXTURE_2D, texture1);
-                break;
-            }
-            case 2: {
-                glBindTexture(GL_TEXTURE_2D, texture2);
-                break;
-            }
-            case 3: {
-                glBindTexture(GL_TEXTURE_2D, texture3);
-                break;
-            }
-            case 4: {
-                glBindTexture(GL_TEXTURE_2D, texture4);
-                break;
-            }
-            case 5: {
-                glBindTexture(GL_TEXTURE_2D, texture5);
-                break;
-            }
-            case 6: {
-                glBindTexture(GL_TEXTURE_2D, texture6);
-                break;
-            }
-            case 7: {
-                glBindTexture(GL_TEXTURE_2D, texture7);
-                break;
-            }
-            case 8: {
-                glBindTexture(GL_TEXTURE_2D, texture8);
-                break;
-            }
-            case 9: {
-                glBindTexture(GL_TEXTURE_2D, texture9);
-                break;
-            }
-            default: glBindTexture(GL_TEXTURE_2D, texture0); // Fallback, should not occur
-            }
-            glBindVertexArray(coordinatesVao2[6]);
-            glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
-            // num3 for x for drone 2
-            switch (second) {
-            case 0: {
-                glBindTexture(GL_TEXTURE_2D, texture0);
-                break;
-            }
-            case 1: {
-                glBindTexture(GL_TEXTURE_2D, texture1);
-                break;
-            }
-            case 2: {
-                glBindTexture(GL_TEXTURE_2D, texture2);
-                break;
-            }
-            case 3: {
-                glBindTexture(GL_TEXTURE_2D, texture3);
-                break;
-            }
-            case 4: {
-                glBindTexture(GL_TEXTURE_2D, texture4);
-                break;
-            }
-            case 5: {
-                glBindTexture(GL_TEXTURE_2D, texture5);
-                break;
-            }
-            case 6: {
-                glBindTexture(GL_TEXTURE_2D, texture6);
-                break;
-            }
-            case 7: {
-                glBindTexture(GL_TEXTURE_2D, texture7);
-                break;
-            }
-            case 8: {
-                glBindTexture(GL_TEXTURE_2D, texture8);
-                break;
-            }
-            case 9: {
-                glBindTexture(GL_TEXTURE_2D, texture9);
-                break;
-            }
-            default: glBindTexture(GL_TEXTURE_2D, texture0); // Fallback, should not occur
-            }
-            glBindVertexArray(coordinatesVao2[7]);
-            glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+
+            drawDigit(6, first, texture0, texture1, texture2, texture3, texture4, texture5, texture6, texture7, texture8, texture9, coordinatesVao2);
+            drawDigit(7, second, texture0, texture1, texture2, texture3, texture4, texture5, texture6, texture7, texture8, texture9, coordinatesVao2);
         }
 
         // y for drone 2
-        glBindTexture(GL_TEXTURE_2D, texturey);
+        glBindTexture(GL_TEXTURE_2D, textureY);
         glBindVertexArray(coordinatesVao2y[0]);
         glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
         // : for y for drone 2
@@ -3745,150 +1963,62 @@ int main(void)
             int precise = static_cast<int>(round(scaledY));
             int first = (precise / 10) % 10;
             int second = precise % 10;
-            switch (first) {
-            case 0: {
-                glBindTexture(GL_TEXTURE_2D, texture0);
-                break;
-            }
-            case 1: {
-                glBindTexture(GL_TEXTURE_2D, texture1);
-                break;
-            }
-            case 2: {
-                glBindTexture(GL_TEXTURE_2D, texture2);
-                break;
-            }
-            case 3: {
-                glBindTexture(GL_TEXTURE_2D, texture3);
-                break;
-            }
-            case 4: {
-                glBindTexture(GL_TEXTURE_2D, texture4);
-                break;
-            }
-            case 5: {
-                glBindTexture(GL_TEXTURE_2D, texture5);
-                break;
-            }
-            case 6: {
-                glBindTexture(GL_TEXTURE_2D, texture6);
-                break;
-            }
-            case 7: {
-                glBindTexture(GL_TEXTURE_2D, texture7);
-                break;
-            }
-            case 8: {
-                glBindTexture(GL_TEXTURE_2D, texture8);
-                break;
-            }
-            case 9: {
-                glBindTexture(GL_TEXTURE_2D, texture9);
-                break;
-            }
-            default: glBindTexture(GL_TEXTURE_2D, texture0); // Fallback, should not occur
-            }
-            glBindVertexArray(coordinatesVao2y[6]);
-            glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
-            // num3 for x for drone 1
-            switch (second) {
-            case 0: {
-                glBindTexture(GL_TEXTURE_2D, texture0);
-                break;
-            }
-            case 1: {
-                glBindTexture(GL_TEXTURE_2D, texture1);
-                break;
-            }
-            case 2: {
-                glBindTexture(GL_TEXTURE_2D, texture2);
-                break;
-            }
-            case 3: {
-                glBindTexture(GL_TEXTURE_2D, texture3);
-                break;
-            }
-            case 4: {
-                glBindTexture(GL_TEXTURE_2D, texture4);
-                break;
-            }
-            case 5: {
-                glBindTexture(GL_TEXTURE_2D, texture5);
-                break;
-            }
-            case 6: {
-                glBindTexture(GL_TEXTURE_2D, texture6);
-                break;
-            }
-            case 7: {
-                glBindTexture(GL_TEXTURE_2D, texture7);
-                break;
-            }
-            case 8: {
-                glBindTexture(GL_TEXTURE_2D, texture8);
-                break;
-            }
-            case 9: {
-                glBindTexture(GL_TEXTURE_2D, texture9);
-                break;
-            }
-            default: glBindTexture(GL_TEXTURE_2D, texture0); // Fallback, should not occur
-            }
-            glBindVertexArray(coordinatesVao2y[7]);
-            glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+
+            drawDigit(6, first, texture0, texture1, texture2, texture3, texture4, texture5, texture6, texture7, texture8, texture9, coordinatesVao2y);
+            drawDigit(7, second, texture0, texture1, texture2, texture3, texture4, texture5, texture6, texture7, texture8, texture9, coordinatesVao2y);
         }
 
         //IME I PREZIME
         //m
-        glBindTexture(GL_TEXTURE_2D, texturem);
+        glBindTexture(GL_TEXTURE_2D, textureM);
         glBindVertexArray(nameVao[0]);
         glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
         //i
-        glBindTexture(GL_TEXTURE_2D, texturei);
+        glBindTexture(GL_TEXTURE_2D, textureI);
         glBindVertexArray(nameVao[1]);
         glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
         //l
-        glBindTexture(GL_TEXTURE_2D, texturel);
+        glBindTexture(GL_TEXTURE_2D, textureL);
         glBindVertexArray(nameVao[2]);
         glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
         //a
-        glBindTexture(GL_TEXTURE_2D, texturea);
+        glBindTexture(GL_TEXTURE_2D, textureA);
         glBindVertexArray(nameVao[3]);
         glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
         //m
-        glBindTexture(GL_TEXTURE_2D, texturem);
+        glBindTexture(GL_TEXTURE_2D, textureM);
         glBindVertexArray(nameVao[4]);
         glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
         //i
-        glBindTexture(GL_TEXTURE_2D, texturei);
+        glBindTexture(GL_TEXTURE_2D, textureI);
         glBindVertexArray(nameVao[5]);
         glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
         //l
-        glBindTexture(GL_TEXTURE_2D, texturel);
+        glBindTexture(GL_TEXTURE_2D, textureL);
         glBindVertexArray(nameVao[6]);
         glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
         //o
-        glBindTexture(GL_TEXTURE_2D, textureo);
+        glBindTexture(GL_TEXTURE_2D, textureO);
         glBindVertexArray(nameVao[7]);
         glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
         //v
-        glBindTexture(GL_TEXTURE_2D, texturev);
+        glBindTexture(GL_TEXTURE_2D, textureV);
         glBindVertexArray(nameVao[8]);
         glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
         //i
-        glBindTexture(GL_TEXTURE_2D, texturei);
+        glBindTexture(GL_TEXTURE_2D, textureI);
         glBindVertexArray(nameVao[9]);
         glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
         //c
-        glBindTexture(GL_TEXTURE_2D, texturec);
+        glBindTexture(GL_TEXTURE_2D, textureC);
         glBindVertexArray(nameVao[10]);
         glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
         //s
-        glBindTexture(GL_TEXTURE_2D, textures);
+        glBindTexture(GL_TEXTURE_2D, textureS);
         glBindVertexArray(indexVao[0]);
         glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
         //v
-        glBindTexture(GL_TEXTURE_2D, texturev);
+        glBindTexture(GL_TEXTURE_2D, textureV);
         glBindVertexArray(indexVao[1]);
         glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
         //2
@@ -3924,78 +2054,78 @@ int main(void)
         //DESTROYED 1
         if (drone1.destroyed) {
             //d
-            glBindTexture(GL_TEXTURE_2D, textured);
+            glBindTexture(GL_TEXTURE_2D, textureD);
             glBindVertexArray(destroyedVao1[0]);
             glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
             //e
-            glBindTexture(GL_TEXTURE_2D, texturee);
+            glBindTexture(GL_TEXTURE_2D, textureE);
             glBindVertexArray(destroyedVao1[1]);
             glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
             //s
-            glBindTexture(GL_TEXTURE_2D, textures);
+            glBindTexture(GL_TEXTURE_2D, textureS);
             glBindVertexArray(destroyedVao1[2]);
             glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
             //t
-            glBindTexture(GL_TEXTURE_2D, texturet);
+            glBindTexture(GL_TEXTURE_2D, textureT);
             glBindVertexArray(destroyedVao1[3]);
             glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
             //r
-            glBindTexture(GL_TEXTURE_2D, texturer);
+            glBindTexture(GL_TEXTURE_2D, textureR);
             glBindVertexArray(destroyedVao1[4]);
             glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
             //o
-            glBindTexture(GL_TEXTURE_2D, textureo);
+            glBindTexture(GL_TEXTURE_2D, textureO);
             glBindVertexArray(destroyedVao1[5]);
             glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
             //y
-            glBindTexture(GL_TEXTURE_2D, texturey);
+            glBindTexture(GL_TEXTURE_2D, textureY);
             glBindVertexArray(destroyedVao1[6]);
             glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
             //e
-            glBindTexture(GL_TEXTURE_2D, texturee);
+            glBindTexture(GL_TEXTURE_2D, textureE);
             glBindVertexArray(destroyedVao1[7]);
             glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
             //d
-            glBindTexture(GL_TEXTURE_2D, textured);
+            glBindTexture(GL_TEXTURE_2D, textureD);
             glBindVertexArray(destroyedVao1[8]);
             glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
         }
         //DESTROYED 2
         if (drone2.destroyed) {
             //d
-            glBindTexture(GL_TEXTURE_2D, textured);
+            glBindTexture(GL_TEXTURE_2D, textureD);
             glBindVertexArray(destroyedVao2[0]);
             glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
             //e
-            glBindTexture(GL_TEXTURE_2D, texturee);
+            glBindTexture(GL_TEXTURE_2D, textureE);
             glBindVertexArray(destroyedVao2[1]);
             glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
             //s
-            glBindTexture(GL_TEXTURE_2D, textures);
+            glBindTexture(GL_TEXTURE_2D, textureS);
             glBindVertexArray(destroyedVao2[2]);
             glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
             //t
-            glBindTexture(GL_TEXTURE_2D, texturet);
+            glBindTexture(GL_TEXTURE_2D, textureT);
             glBindVertexArray(destroyedVao2[3]);
             glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
             //r
-            glBindTexture(GL_TEXTURE_2D, texturer);
+            glBindTexture(GL_TEXTURE_2D, textureR);
             glBindVertexArray(destroyedVao2[4]);
             glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
             //o
-            glBindTexture(GL_TEXTURE_2D, textureo);
+            glBindTexture(GL_TEXTURE_2D, textureO);
             glBindVertexArray(destroyedVao2[5]);
             glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
             //y
-            glBindTexture(GL_TEXTURE_2D, texturey);
+            glBindTexture(GL_TEXTURE_2D, textureY);
             glBindVertexArray(destroyedVao2[6]);
             glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
             //e
-            glBindTexture(GL_TEXTURE_2D, texturee);
+            glBindTexture(GL_TEXTURE_2D, textureE);
             glBindVertexArray(destroyedVao2[7]);
             glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
             //d
-            glBindTexture(GL_TEXTURE_2D, textured);
+            glBindTexture(GL_TEXTURE_2D, textureD);
             glBindVertexArray(destroyedVao2[8]);
             glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
         }
@@ -4014,6 +2144,7 @@ int main(void)
 
     glDeleteProgram(unifiedShader);
     glDeleteProgram(textureShader);
+    glDeleteProgram(mapShader);
 
     glDeleteTextures(1, &mapTexture);
     glDeleteBuffers(1, &VBO);

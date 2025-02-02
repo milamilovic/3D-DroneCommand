@@ -136,6 +136,8 @@
     <None Include="basic.vert" />
     <None Include="basic_3d.frag" />
     <None Include="basic_3d.vert" />
+    <None Include="map.frag" />
+    <None Include="map.vert" />
     <None Include="packages.config" />
     <None Include="res\drone.blend" />
     <None Include="res\drone.blend1" />
