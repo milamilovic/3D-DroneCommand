@@ -22,6 +22,56 @@ unsigned int compileShader(GLenum type, const char* source);
 unsigned int createShader(const char* vsSource, const char* fsSource);
 static unsigned loadImageToTexture(const char* filePath);
 
+unsigned loadAndConfigureTexture(const char* filePath, unsigned shaderProgram, const char* uniformName, int textureUnit) {
+    unsigned texture = loadImageToTexture(filePath);
+
+    glBindTexture(GL_TEXTURE_2D, texture);
+    glGenerateMipmap(GL_TEXTURE_2D);
+
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+
+    glBindTexture(GL_TEXTURE_2D, 0);
+
+    // Set texture uniform
+    glUseProgram(shaderProgram);
+    unsigned uTexLoc = glGetUniformLocation(shaderProgram, uniformName);
+    glUniform1i(uTexLoc, textureUnit);
+    glUseProgram(0);
+
+    return texture;
+}
+
+void createVAO(unsigned int& VAO, unsigned int& VBO, unsigned int& EBO,
+    const float* vertices, size_t vertexSize,
+    const unsigned int* indices, size_t indexSize,
+    int vertexAttribCount, int stride, int texCoordOffset) {
+    glGenVertexArrays(1, &VAO);
+    glGenBuffers(1, &VBO);
+    glBindVertexArray(VAO);
+
+    glBindBuffer(GL_ARRAY_BUFFER, VBO);
+    glBufferData(GL_ARRAY_BUFFER, vertexSize, vertices, GL_STATIC_DRAW);
+
+    if (indices) { // if an EBO is needed
+        glGenBuffers(1, &EBO);
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
+        glBufferData(GL_ELEMENT_ARRAY_BUFFER, indexSize, indices, GL_STATIC_DRAW);
+    }
+
+    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, stride, (void*)0);
+    glEnableVertexAttribArray(0);
+
+    glVertexAttribPointer(1, vertexAttribCount, GL_FLOAT, GL_FALSE, stride, (void*)(texCoordOffset));
+    glEnableVertexAttribArray(1);
+
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+    glBindVertexArray(0);
+}
+
+
 struct Drone {
     float x, y;
     float radius;
@@ -264,6 +314,7 @@ int main(void)
 
     unsigned int unifiedShader = createShader("basic.vert", "basic.frag");
     unsigned int textureShader = createShader("texture.vert", "texture.frag");
+    unsigned int mapShader = createShader("map.vert", "map.frag");
 
 
     glBindBuffer(GL_ARRAY_BUFFER, 0);
@@ -296,6 +347,10 @@ int main(void)
     // ++++++++++++++++++++++++++++++++++++++++++++++++++++++            2D INICIJALIZACIJA            +++++++++++++++++++++++++++++++++++++++++++++++++
 
 
+
+    unsigned int stride = (2 + 2) * sizeof(float);
+
+    //map
     float map[] = {
         // X    Y      S    T
         1.0f,  1.0f,  1.0f, 1.0f, // Top-right
@@ -303,124 +358,41 @@ int main(void)
        -1.0f, -0.7f,  0.0f, 0.0f, // Bottom-left
        -1.0f,  1.0f,  0.0f, 1.0f  // Top-left
     };
-
     unsigned int indices[] = {
         0, 3, 1, // First triangle
         1, 3, 2  // Second triangle
     };
-
-    unsigned int stride = (2 + 2) * sizeof(float);
-
     unsigned int VAO, VBO, EBO;
-    glGenVertexArrays(1, &VAO);
-    glGenBuffers(1, &VBO);
-    glGenBuffers(1, &EBO);
+    createVAO(VAO, VBO, EBO, map, sizeof(map), indices, sizeof(indices), 2, stride, 2 * sizeof(float));
 
-    glBindVertexArray(VAO);
-
-    glBindBuffer(GL_ARRAY_BUFFER, VBO);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(map), map, GL_STATIC_DRAW);
-
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW);
-
-    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, stride, (void*)0);
-    glEnableVertexAttribArray(0);
-
-    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, (void*)(2 * sizeof(float)));
-    glEnableVertexAttribArray(1);
-
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 
     //no fly zone
     unsigned int noFlyZoneVAO, noFlyZoneVBO;
-    glGenVertexArrays(1, &noFlyZoneVAO);
-    glGenBuffers(1, &noFlyZoneVBO);
-    glBindVertexArray(noFlyZoneVAO);
-    glBindBuffer(GL_ARRAY_BUFFER, noFlyZoneVBO);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(noFlyZoneVertices), noFlyZoneVertices, GL_STATIC_DRAW);
-    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)0);
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)(2 * sizeof(float)));
-    glEnableVertexAttribArray(1);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
+    createVAO(noFlyZoneVAO, noFlyZoneVBO, EBO, noFlyZoneVertices, sizeof(noFlyZoneVertices), nullptr, 0, 4, 6 * sizeof(float), 2 * sizeof(float));
 
     //drone 1
     unsigned int droneVAO1, droneVBO1;
-    glGenVertexArrays(1, &droneVAO1);
-    glGenBuffers(1, &droneVBO1);
-    glBindVertexArray(droneVAO1);
-    glBindBuffer(GL_ARRAY_BUFFER, droneVBO1);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(droneVertices1), droneVertices1, GL_STATIC_DRAW);
-    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)0);
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)(2 * sizeof(float)));
-    glEnableVertexAttribArray(1);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
+    createVAO(droneVAO1, droneVBO1, EBO, droneVertices1, sizeof(droneVertices1), nullptr, 0, 4, 6 * sizeof(float), 2 * sizeof(float));
+
 
     //drone 2
     unsigned int droneVAO2, droneVBO2;
-    glGenVertexArrays(1, &droneVAO2);
-    glGenBuffers(1, &droneVBO2);
-    glBindVertexArray(droneVAO2);
-    glBindBuffer(GL_ARRAY_BUFFER, droneVBO2);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(droneVertices2), droneVertices2, GL_STATIC_DRAW);
-    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)0);
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)(2 * sizeof(float)));
-    glEnableVertexAttribArray(1);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
+    createVAO(droneVAO2, droneVBO2, EBO, droneVertices2, sizeof(droneVertices2), nullptr, 0, 4, 6 * sizeof(float), 2 * sizeof(float));
 
+
+    //progress bars
     unsigned int progressIndices1[] = {
         0, 2, 1, 2, 0, 3, // Background
         4, 6, 5, 6, 4, 7  // Filled portion
     };
-
     unsigned int progressIndices2[] = {
         0, 2, 1, 2, 0, 3, // Background
         4, 6, 5, 6, 4, 7  // Filled portion
     };
-
-    //progress bar 1
     unsigned int progressVAO1, progressVBO1, progressEBO1;
-    glGenVertexArrays(1, &progressVAO1);
-    glGenBuffers(1, &progressVBO1);
-    glGenBuffers(1, &progressEBO1);
-    glBindVertexArray(progressVAO1);
-    glBindBuffer(GL_ARRAY_BUFFER, progressVBO1);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(progressVertices1), progressVertices1, GL_STATIC_DRAW);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, progressEBO1);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(progressIndices1), progressIndices1, GL_STATIC_DRAW);
-    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)0);
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)(2 * sizeof(float)));
-    glEnableVertexAttribArray(1);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-
-    //progress bar 2
     unsigned int progressVAO2, progressVBO2, progressEBO2;
-    glGenVertexArrays(1, &progressVAO2);
-    glGenBuffers(1, &progressVBO2);
-    glGenBuffers(1, &progressEBO2);
-    glBindVertexArray(progressVAO2);
-    glBindBuffer(GL_ARRAY_BUFFER, progressVBO2);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(progressVertices2), progressVertices2, GL_STATIC_DRAW);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, progressEBO2);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(progressIndices2), progressIndices2, GL_STATIC_DRAW);
-    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)0);
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)(2 * sizeof(float)));
-    glEnableVertexAttribArray(1);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+    createVAO(progressVAO1, progressVBO1, progressEBO1, progressVertices1, sizeof(progressVertices1), progressIndices1, sizeof(progressIndices1), 4, 6 * sizeof(float), 2 * sizeof(float));
+    createVAO(progressVAO2, progressVBO2, progressEBO2, progressVertices2, sizeof(progressVertices2), progressIndices2, sizeof(progressIndices2), 4, 6 * sizeof(float), 2 * sizeof(float));
 
     //battery level 1
     float rectangleVertices11[] = {
@@ -470,9 +442,6 @@ int main(void)
     glEnableVertexAttribArray(0);
     glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, (void*)(2 * sizeof(float)));
     glEnableVertexAttribArray(1);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
     //second number
     glBindVertexArray(batteryVao1[1]);
     glBindBuffer(GL_ARRAY_BUFFER, batteryVbo1[1]);
@@ -483,9 +452,6 @@ int main(void)
     glEnableVertexAttribArray(0);
     glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, (void*)(2 * sizeof(float)));
     glEnableVertexAttribArray(1);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
     //third number
     glBindVertexArray(batteryVao1[2]);
     glBindBuffer(GL_ARRAY_BUFFER, batteryVbo1[2]);
@@ -496,9 +462,6 @@ int main(void)
     glEnableVertexAttribArray(0);
     glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, (void*)(2 * sizeof(float)));
     glEnableVertexAttribArray(1);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 
     //battery level 2
     float rectangleVertices21[] = {
@@ -548,9 +511,6 @@ int main(void)
     glEnableVertexAttribArray(0);
     glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, (void*)(2 * sizeof(float)));
     glEnableVertexAttribArray(1);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
     //second number
     glBindVertexArray(batteryVao2[1]);
     glBindBuffer(GL_ARRAY_BUFFER, batteryVbo2[1]);
@@ -561,9 +521,6 @@ int main(void)
     glEnableVertexAttribArray(0);
     glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, (void*)(2 * sizeof(float)));
     glEnableVertexAttribArray(1);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
     //third number
     glBindVertexArray(batteryVao2[2]);
     glBindBuffer(GL_ARRAY_BUFFER, batteryVbo2[2]);
@@ -574,9 +531,6 @@ int main(void)
     glEnableVertexAttribArray(0);
     glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, (void*)(2 * sizeof(float)));
     glEnableVertexAttribArray(1);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 
     //coordinates 1 : X
     float coordinates1x[] = {
@@ -681,9 +635,6 @@ int main(void)
     glEnableVertexAttribArray(0);
     glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, (void*)(2 * sizeof(float)));
     glEnableVertexAttribArray(1);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
     //drone 1 x dot 1
     glBindVertexArray(coordinatesVao1[1]);
     glBindBuffer(GL_ARRAY_BUFFER, coordinatesVbo1[1]);
@@ -694,9 +645,6 @@ int main(void)
     glEnableVertexAttribArray(0);
     glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, (void*)(2 * sizeof(float)));
     glEnableVertexAttribArray(1);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
     //drone 1 x dot 2
     glBindVertexArray(coordinatesVao1[2]);
     glBindBuffer(GL_ARRAY_BUFFER, coordinatesVbo1[2]);
@@ -707,9 +655,6 @@ int main(void)
     glEnableVertexAttribArray(0);
     glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, (void*)(2 * sizeof(float)));
     glEnableVertexAttribArray(1);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
     //drone 1 x minus
     glBindVertexArray(coordinatesVao1[3]);
     glBindBuffer(GL_ARRAY_BUFFER, coordinatesVbo1[3]);
@@ -720,9 +665,6 @@ int main(void)
     glEnableVertexAttribArray(0);
     glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, (void*)(2 * sizeof(float)));
     glEnableVertexAttribArray(1);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
     //drone 1 x number 1
     glBindVertexArray(coordinatesVao1[4]);
     glBindBuffer(GL_ARRAY_BUFFER, coordinatesVbo1[4]);
@@ -733,9 +675,6 @@ int main(void)
     glEnableVertexAttribArray(0);
     glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, (void*)(2 * sizeof(float)));
     glEnableVertexAttribArray(1);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
     //drone 1 x dot
     glBindVertexArray(coordinatesVao1[5]);
     glBindBuffer(GL_ARRAY_BUFFER, coordinatesVbo1[5]);
@@ -746,9 +685,6 @@ int main(void)
     glEnableVertexAttribArray(0);
     glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, (void*)(2 * sizeof(float)));
     glEnableVertexAttribArray(1);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
     //drone 1 x number 2
     glBindVertexArray(coordinatesVao1[6]);
     glBindBuffer(GL_ARRAY_BUFFER, coordinatesVbo1[6]);
@@ -759,9 +695,6 @@ int main(void)
     glEnableVertexAttribArray(0);
     glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, (void*)(2 * sizeof(float)));
     glEnableVertexAttribArray(1);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
     //drone 1 x number 3
     glBindVertexArray(coordinatesVao1[7]);
     glBindBuffer(GL_ARRAY_BUFFER, coordinatesVbo1[7]);
@@ -772,9 +705,6 @@ int main(void)
     glEnableVertexAttribArray(0);
     glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, (void*)(2 * sizeof(float)));
     glEnableVertexAttribArray(1);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 
 
     //coordinates 1 : Y
@@ -880,9 +810,6 @@ int main(void)
     glEnableVertexAttribArray(0);
     glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, (void*)(2 * sizeof(float)));
     glEnableVertexAttribArray(1);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
     //drone 1 y dot 1
     glBindVertexArray(coordinatesVao1y[1]);
     glBindBuffer(GL_ARRAY_BUFFER, coordinatesVbo1y[1]);
@@ -893,9 +820,6 @@ int main(void)
     glEnableVertexAttribArray(0);
     glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, (void*)(2 * sizeof(float)));
     glEnableVertexAttribArray(1);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
     //drone 1 y dot 2
     glBindVertexArray(coordinatesVao1y[2]);
     glBindBuffer(GL_ARRAY_BUFFER, coordinatesVbo1y[2]);
@@ -906,9 +830,6 @@ int main(void)
     glEnableVertexAttribArray(0);
     glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, (void*)(2 * sizeof(float)));
     glEnableVertexAttribArray(1);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
     //drone 1 y minus
     glBindVertexArray(coordinatesVao1y[3]);
     glBindBuffer(GL_ARRAY_BUFFER, coordinatesVbo1y[3]);
@@ -919,9 +840,6 @@ int main(void)
     glEnableVertexAttribArray(0);
     glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, (void*)(2 * sizeof(float)));
     glEnableVertexAttribArray(1);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
     //drone 1 y number 1
     glBindVertexArray(coordinatesVao1y[4]);
     glBindBuffer(GL_ARRAY_BUFFER, coordinatesVbo1y[4]);
@@ -932,9 +850,6 @@ int main(void)
     glEnableVertexAttribArray(0);
     glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, (void*)(2 * sizeof(float)));
     glEnableVertexAttribArray(1);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
     //drone 1 y dot
     glBindVertexArray(coordinatesVao1y[5]);
     glBindBuffer(GL_ARRAY_BUFFER, coordinatesVbo1y[5]);
@@ -945,9 +860,6 @@ int main(void)
     glEnableVertexAttribArray(0);
     glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, (void*)(2 * sizeof(float)));
     glEnableVertexAttribArray(1);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
     //drone 1 y number 2
     glBindVertexArray(coordinatesVao1y[6]);
     glBindBuffer(GL_ARRAY_BUFFER, coordinatesVbo1y[6]);
@@ -958,9 +870,6 @@ int main(void)
     glEnableVertexAttribArray(0);
     glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, (void*)(2 * sizeof(float)));
     glEnableVertexAttribArray(1);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
     //drone 1 y number 3
     glBindVertexArray(coordinatesVao1y[7]);
     glBindBuffer(GL_ARRAY_BUFFER, coordinatesVbo1y[7]);
@@ -971,9 +880,6 @@ int main(void)
     glEnableVertexAttribArray(0);
     glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, (void*)(2 * sizeof(float)));
     glEnableVertexAttribArray(1);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 
     //coordinates 2 : X
     float coordinates2x[] = {
@@ -1078,9 +984,6 @@ int main(void)
     glEnableVertexAttribArray(0);
     glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, (void*)(2 * sizeof(float)));
     glEnableVertexAttribArray(1);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
     //drone 2 x dot 1
     glBindVertexArray(coordinatesVao2[1]);
     glBindBuffer(GL_ARRAY_BUFFER, coordinatesVbo2[1]);
@@ -1091,9 +994,6 @@ int main(void)
     glEnableVertexAttribArray(0);
     glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, (void*)(2 * sizeof(float)));
     glEnableVertexAttribArray(1);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
     //drone 2 x dot 2
     glBindVertexArray(coordinatesVao2[2]);
     glBindBuffer(GL_ARRAY_BUFFER, coordinatesVbo2[2]);
@@ -1104,9 +1004,6 @@ int main(void)
     glEnableVertexAttribArray(0);
     glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, (void*)(2 * sizeof(float)));
     glEnableVertexAttribArray(1);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
     //drone 2 x minus
     glBindVertexArray(coordinatesVao2[3]);
     glBindBuffer(GL_ARRAY_BUFFER, coordinatesVbo2[3]);
@@ -1117,9 +1014,6 @@ int main(void)
     glEnableVertexAttribArray(0);
     glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, (void*)(2 * sizeof(float)));
     glEnableVertexAttribArray(1);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
     //drone 2 x number 1
     glBindVertexArray(coordinatesVao2[4]);
     glBindBuffer(GL_ARRAY_BUFFER, coordinatesVbo2[4]);
@@ -1130,9 +1024,6 @@ int main(void)
     glEnableVertexAttribArray(0);
     glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, (void*)(2 * sizeof(float)));
     glEnableVertexAttribArray(1);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
     //drone 2 x dot
     glBindVertexArray(coordinatesVao2[5]);
     glBindBuffer(GL_ARRAY_BUFFER, coordinatesVbo2[5]);
@@ -1143,9 +1034,6 @@ int main(void)
     glEnableVertexAttribArray(0);
     glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, (void*)(2 * sizeof(float)));
     glEnableVertexAttribArray(1);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
     //drone 2 x number 2
     glBindVertexArray(coordinatesVao2[6]);
     glBindBuffer(GL_ARRAY_BUFFER, coordinatesVbo2[6]);
@@ -1156,9 +1044,6 @@ int main(void)
     glEnableVertexAttribArray(0);
     glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, (void*)(2 * sizeof(float)));
     glEnableVertexAttribArray(1);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
     //drone 2 x number 3
     glBindVertexArray(coordinatesVao2[7]);
     glBindBuffer(GL_ARRAY_BUFFER, coordinatesVbo2[7]);
@@ -1169,9 +1054,6 @@ int main(void)
     glEnableVertexAttribArray(0);
     glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, (void*)(2 * sizeof(float)));
     glEnableVertexAttribArray(1);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 
 
     //coordinates 2 : Y
@@ -1277,9 +1159,6 @@ int main(void)
     glEnableVertexAttribArray(0);
     glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, (void*)(2 * sizeof(float)));
     glEnableVertexAttribArray(1);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
     //drone 2 y dot 1
     glBindVertexArray(coordinatesVao2y[1]);
     glBindBuffer(GL_ARRAY_BUFFER, coordinatesVbo2y[1]);
@@ -1290,9 +1169,6 @@ int main(void)
     glEnableVertexAttribArray(0);
     glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, (void*)(2 * sizeof(float)));
     glEnableVertexAttribArray(1);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
     //drone 2 y dot 2
     glBindVertexArray(coordinatesVao2y[2]);
     glBindBuffer(GL_ARRAY_BUFFER, coordinatesVbo2y[2]);
@@ -1303,9 +1179,6 @@ int main(void)
     glEnableVertexAttribArray(0);
     glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, (void*)(2 * sizeof(float)));
     glEnableVertexAttribArray(1);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
     //drone 2 y minus
     glBindVertexArray(coordinatesVao2y[3]);
     glBindBuffer(GL_ARRAY_BUFFER, coordinatesVbo2y[3]);
@@ -1316,9 +1189,6 @@ int main(void)
     glEnableVertexAttribArray(0);
     glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, (void*)(2 * sizeof(float)));
     glEnableVertexAttribArray(1);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
     //drone 2 y number 1
     glBindVertexArray(coordinatesVao2y[4]);
     glBindBuffer(GL_ARRAY_BUFFER, coordinatesVbo2y[4]);
@@ -1329,9 +1199,6 @@ int main(void)
     glEnableVertexAttribArray(0);
     glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, (void*)(2 * sizeof(float)));
     glEnableVertexAttribArray(1);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
     //drone 2 y dot
     glBindVertexArray(coordinatesVao2y[5]);
     glBindBuffer(GL_ARRAY_BUFFER, coordinatesVbo2y[5]);
@@ -1342,9 +1209,6 @@ int main(void)
     glEnableVertexAttribArray(0);
     glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, (void*)(2 * sizeof(float)));
     glEnableVertexAttribArray(1);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
     //drone 2 y number 2
     glBindVertexArray(coordinatesVao2y[6]);
     glBindBuffer(GL_ARRAY_BUFFER, coordinatesVbo2y[6]);
@@ -1355,9 +1219,6 @@ int main(void)
     glEnableVertexAttribArray(0);
     glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, (void*)(2 * sizeof(float)));
     glEnableVertexAttribArray(1);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
     //drone 2 y number 3
     glBindVertexArray(coordinatesVao2y[7]);
     glBindBuffer(GL_ARRAY_BUFFER, coordinatesVbo2y[7]);
@@ -1368,9 +1229,6 @@ int main(void)
     glEnableVertexAttribArray(0);
     glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, (void*)(2 * sizeof(float)));
     glEnableVertexAttribArray(1);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 
     // IME PREZIME I INDEKS
     float name1[] = {
@@ -1611,9 +1469,6 @@ int main(void)
     glEnableVertexAttribArray(0);
     glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, (void*)(2 * sizeof(float)));
     glEnableVertexAttribArray(1);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
     //I
     glBindVertexArray(nameVao[1]);
     glBindBuffer(GL_ARRAY_BUFFER, nameVbo[1]);
@@ -1624,9 +1479,6 @@ int main(void)
     glEnableVertexAttribArray(0);
     glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, (void*)(2 * sizeof(float)));
     glEnableVertexAttribArray(1);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
     //L
     glBindVertexArray(nameVao[2]);
     glBindBuffer(GL_ARRAY_BUFFER, nameVbo[2]);
@@ -1637,9 +1489,6 @@ int main(void)
     glEnableVertexAttribArray(0);
     glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, (void*)(2 * sizeof(float)));
     glEnableVertexAttribArray(1);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
     //A
     glBindVertexArray(nameVao[3]);
     glBindBuffer(GL_ARRAY_BUFFER, nameVbo[3]);
@@ -1650,9 +1499,6 @@ int main(void)
     glEnableVertexAttribArray(0);
     glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, (void*)(2 * sizeof(float)));
     glEnableVertexAttribArray(1);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
     //M
     glBindVertexArray(nameVao[4]);
     glBindBuffer(GL_ARRAY_BUFFER, nameVbo[4]);
@@ -1663,9 +1509,6 @@ int main(void)
     glEnableVertexAttribArray(0);
     glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, (void*)(2 * sizeof(float)));
     glEnableVertexAttribArray(1);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
     //I
     glBindVertexArray(nameVao[5]);
     glBindBuffer(GL_ARRAY_BUFFER, nameVbo[5]);
@@ -1676,9 +1519,6 @@ int main(void)
     glEnableVertexAttribArray(0);
     glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, (void*)(2 * sizeof(float)));
     glEnableVertexAttribArray(1);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
     //L
     glBindVertexArray(nameVao[6]);
     glBindBuffer(GL_ARRAY_BUFFER, nameVbo[6]);
@@ -1689,9 +1529,6 @@ int main(void)
     glEnableVertexAttribArray(0);
     glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, (void*)(2 * sizeof(float)));
     glEnableVertexAttribArray(1);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
     //O
     glBindVertexArray(nameVao[7]);
     glBindBuffer(GL_ARRAY_BUFFER, nameVbo[7]);
@@ -1702,9 +1539,6 @@ int main(void)
     glEnableVertexAttribArray(0);
     glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, (void*)(2 * sizeof(float)));
     glEnableVertexAttribArray(1);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
     //V
     glBindVertexArray(nameVao[8]);
     glBindBuffer(GL_ARRAY_BUFFER, nameVbo[8]);
@@ -1715,9 +1549,6 @@ int main(void)
     glEnableVertexAttribArray(0);
     glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, (void*)(2 * sizeof(float)));
     glEnableVertexAttribArray(1);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
     //I
     glBindVertexArray(nameVao[9]);
     glBindBuffer(GL_ARRAY_BUFFER, nameVbo[9]);
@@ -1728,9 +1559,6 @@ int main(void)
     glEnableVertexAttribArray(0);
     glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, (void*)(2 * sizeof(float)));
     glEnableVertexAttribArray(1);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
     //C
     glBindVertexArray(nameVao[10]);
     glBindBuffer(GL_ARRAY_BUFFER, nameVbo[10]);
@@ -1741,9 +1569,6 @@ int main(void)
     glEnableVertexAttribArray(0);
     glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, (void*)(2 * sizeof(float)));
     glEnableVertexAttribArray(1);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
     //S
     glBindVertexArray(indexVao[0]);
     glBindBuffer(GL_ARRAY_BUFFER, indexVbo[0]);
@@ -1754,9 +1579,6 @@ int main(void)
     glEnableVertexAttribArray(0);
     glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, (void*)(2 * sizeof(float)));
     glEnableVertexAttribArray(1);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
     //V
     glBindVertexArray(indexVao[1]);
     glBindBuffer(GL_ARRAY_BUFFER, indexVbo[1]);
@@ -1767,9 +1589,6 @@ int main(void)
     glEnableVertexAttribArray(0);
     glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, (void*)(2 * sizeof(float)));
     glEnableVertexAttribArray(1);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
     //2
     glBindVertexArray(indexVao[2]);
     glBindBuffer(GL_ARRAY_BUFFER, indexVbo[2]);
@@ -1780,9 +1599,6 @@ int main(void)
     glEnableVertexAttribArray(0);
     glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, (void*)(2 * sizeof(float)));
     glEnableVertexAttribArray(1);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
     //2
     glBindVertexArray(indexVao[3]);
     glBindBuffer(GL_ARRAY_BUFFER, indexVbo[3]);
@@ -1793,9 +1609,6 @@ int main(void)
     glEnableVertexAttribArray(0);
     glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, (void*)(2 * sizeof(float)));
     glEnableVertexAttribArray(1);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
     //-
     glBindVertexArray(indexVao[4]);
     glBindBuffer(GL_ARRAY_BUFFER, indexVbo[4]);
@@ -1806,9 +1619,6 @@ int main(void)
     glEnableVertexAttribArray(0);
     glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, (void*)(2 * sizeof(float)));
     glEnableVertexAttribArray(1);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
     //2
     glBindVertexArray(indexVao[5]);
     glBindBuffer(GL_ARRAY_BUFFER, indexVbo[5]);
@@ -1819,9 +1629,6 @@ int main(void)
     glEnableVertexAttribArray(0);
     glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, (void*)(2 * sizeof(float)));
     glEnableVertexAttribArray(1);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
     //0
     glBindVertexArray(indexVao[6]);
     glBindBuffer(GL_ARRAY_BUFFER, indexVbo[6]);
@@ -1832,9 +1639,6 @@ int main(void)
     glEnableVertexAttribArray(0);
     glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, (void*)(2 * sizeof(float)));
     glEnableVertexAttribArray(1);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
     //2
     glBindVertexArray(indexVao[7]);
     glBindBuffer(GL_ARRAY_BUFFER, indexVbo[7]);
@@ -1845,9 +1649,6 @@ int main(void)
     glEnableVertexAttribArray(0);
     glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, (void*)(2 * sizeof(float)));
     glEnableVertexAttribArray(1);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
     //1
     glBindVertexArray(indexVao[8]);
     glBindBuffer(GL_ARRAY_BUFFER, indexVbo[8]);
@@ -1858,9 +1659,6 @@ int main(void)
     glEnableVertexAttribArray(0);
     glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, (void*)(2 * sizeof(float)));
     glEnableVertexAttribArray(1);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 
     //destroyed drone 1
     float destroyed11[] = {
@@ -1976,9 +1774,6 @@ int main(void)
     glEnableVertexAttribArray(0);
     glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, (void*)(2 * sizeof(float)));
     glEnableVertexAttribArray(1);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
     //E
     glBindVertexArray(destroyedVao1[1]);
     glBindBuffer(GL_ARRAY_BUFFER, destroyedVbo1[1]);
@@ -1989,9 +1784,6 @@ int main(void)
     glEnableVertexAttribArray(0);
     glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, (void*)(2 * sizeof(float)));
     glEnableVertexAttribArray(1);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
     //S
     glBindVertexArray(destroyedVao1[2]);
     glBindBuffer(GL_ARRAY_BUFFER, destroyedVbo1[2]);
@@ -2002,9 +1794,6 @@ int main(void)
     glEnableVertexAttribArray(0);
     glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, (void*)(2 * sizeof(float)));
     glEnableVertexAttribArray(1);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
     //T
     glBindVertexArray(destroyedVao1[3]);
     glBindBuffer(GL_ARRAY_BUFFER, destroyedVbo1[3]);
@@ -2015,9 +1804,6 @@ int main(void)
     glEnableVertexAttribArray(0);
     glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, (void*)(2 * sizeof(float)));
     glEnableVertexAttribArray(1);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
     //R
     glBindVertexArray(destroyedVao1[4]);
     glBindBuffer(GL_ARRAY_BUFFER, destroyedVbo1[4]);
@@ -2028,9 +1814,6 @@ int main(void)
     glEnableVertexAttribArray(0);
     glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, (void*)(2 * sizeof(float)));
     glEnableVertexAttribArray(1);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
     //O
     glBindVertexArray(destroyedVao1[5]);
     glBindBuffer(GL_ARRAY_BUFFER, destroyedVbo1[5]);
@@ -2041,9 +1824,6 @@ int main(void)
     glEnableVertexAttribArray(0);
     glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, (void*)(2 * sizeof(float)));
     glEnableVertexAttribArray(1);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
     //Y
     glBindVertexArray(destroyedVao1[6]);
     glBindBuffer(GL_ARRAY_BUFFER, destroyedVbo1[6]);
@@ -2054,9 +1834,6 @@ int main(void)
     glEnableVertexAttribArray(0);
     glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, (void*)(2 * sizeof(float)));
     glEnableVertexAttribArray(1);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
     //E
     glBindVertexArray(destroyedVao1[7]);
     glBindBuffer(GL_ARRAY_BUFFER, destroyedVbo1[7]);
@@ -2067,9 +1844,6 @@ int main(void)
     glEnableVertexAttribArray(0);
     glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, (void*)(2 * sizeof(float)));
     glEnableVertexAttribArray(1);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
     //D
     glBindVertexArray(destroyedVao1[8]);
     glBindBuffer(GL_ARRAY_BUFFER, destroyedVbo1[8]);
@@ -2080,9 +1854,6 @@ int main(void)
     glEnableVertexAttribArray(0);
     glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, (void*)(2 * sizeof(float)));
     glEnableVertexAttribArray(1);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 
 
     //destroyed drone 1
@@ -2199,9 +1970,6 @@ int main(void)
     glEnableVertexAttribArray(0);
     glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, (void*)(2 * sizeof(float)));
     glEnableVertexAttribArray(1);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
     //E
     glBindVertexArray(destroyedVao2[1]);
     glBindBuffer(GL_ARRAY_BUFFER, destroyedVbo2[1]);
@@ -2212,9 +1980,6 @@ int main(void)
     glEnableVertexAttribArray(0);
     glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, (void*)(2 * sizeof(float)));
     glEnableVertexAttribArray(1);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
     //S
     glBindVertexArray(destroyedVao2[2]);
     glBindBuffer(GL_ARRAY_BUFFER, destroyedVbo2[2]);
@@ -2225,9 +1990,6 @@ int main(void)
     glEnableVertexAttribArray(0);
     glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, (void*)(2 * sizeof(float)));
     glEnableVertexAttribArray(1);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
     //T
     glBindVertexArray(destroyedVao2[3]);
     glBindBuffer(GL_ARRAY_BUFFER, destroyedVbo2[3]);
@@ -2238,9 +2000,6 @@ int main(void)
     glEnableVertexAttribArray(0);
     glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, (void*)(2 * sizeof(float)));
     glEnableVertexAttribArray(1);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
     //R
     glBindVertexArray(destroyedVao2[4]);
     glBindBuffer(GL_ARRAY_BUFFER, destroyedVbo2[4]);
@@ -2251,9 +2010,6 @@ int main(void)
     glEnableVertexAttribArray(0);
     glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, (void*)(2 * sizeof(float)));
     glEnableVertexAttribArray(1);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
     //O
     glBindVertexArray(destroyedVao2[5]);
     glBindBuffer(GL_ARRAY_BUFFER, destroyedVbo2[5]);
@@ -2264,9 +2020,6 @@ int main(void)
     glEnableVertexAttribArray(0);
     glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, (void*)(2 * sizeof(float)));
     glEnableVertexAttribArray(1);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
     //Y
     glBindVertexArray(destroyedVao2[6]);
     glBindBuffer(GL_ARRAY_BUFFER, destroyedVbo2[6]);
@@ -2277,9 +2030,6 @@ int main(void)
     glEnableVertexAttribArray(0);
     glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, (void*)(2 * sizeof(float)));
     glEnableVertexAttribArray(1);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
     //E
     glBindVertexArray(destroyedVao2[7]);
     glBindBuffer(GL_ARRAY_BUFFER, destroyedVbo2[7]);
@@ -2290,9 +2040,6 @@ int main(void)
     glEnableVertexAttribArray(0);
     glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, (void*)(2 * sizeof(float)));
     glEnableVertexAttribArray(1);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
     //D
     glBindVertexArray(destroyedVao2[8]);
     glBindBuffer(GL_ARRAY_BUFFER, destroyedVbo2[8]);
@@ -2303,9 +2050,6 @@ int main(void)
     glEnableVertexAttribArray(0);
     glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, (void*)(2 * sizeof(float)));
     glEnableVertexAttribArray(1);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 
     //led
     float ledVertices[] =
@@ -2329,333 +2073,35 @@ int main(void)
     glBindVertexArray(0);
 
 
+    // textures
+    unsigned texture1 = loadAndConfigureTexture("res/1.png", textureShader, "uTex", 0);
+    unsigned texture2 = loadAndConfigureTexture("res/2.png", textureShader, "uTex", 0);
+    unsigned texture3 = loadAndConfigureTexture("res/3.png", textureShader, "uTex", 0);
+    unsigned texture4 = loadAndConfigureTexture("res/4.png", textureShader, "uTex", 0);
+    unsigned texture5 = loadAndConfigureTexture("res/5.png", textureShader, "uTex", 0);
+    unsigned texture6 = loadAndConfigureTexture("res/6.png", textureShader, "uTex", 0);
+    unsigned texture7 = loadAndConfigureTexture("res/7.png", textureShader, "uTex", 0);
+    unsigned texture8 = loadAndConfigureTexture("res/8.png", textureShader, "uTex", 0);
+    unsigned texture9 = loadAndConfigureTexture("res/9.png", textureShader, "uTex", 0);
+    unsigned texture0 = loadAndConfigureTexture("res/0.png", textureShader, "uTex", 0);
+    unsigned textureX = loadAndConfigureTexture("res/x.png", textureShader, "uTex", 0);
+    unsigned textureY = loadAndConfigureTexture("res/y.png", textureShader, "uTex", 0);
+    unsigned textureDot = loadAndConfigureTexture("res/dot.png", textureShader, "uTex", 0);
+    unsigned textureMinus = loadAndConfigureTexture("res/minus.png", textureShader, "uTex", 0);
+    unsigned textureM = loadAndConfigureTexture("res/m.png", textureShader, "uTex", 0);
+    unsigned textureI = loadAndConfigureTexture("res/i.png", textureShader, "uTex", 0);
+    unsigned textureL = loadAndConfigureTexture("res/l.png", textureShader, "uTex", 0);
+    unsigned textureA = loadAndConfigureTexture("res/a.png", textureShader, "uTex", 0);
+    unsigned textureO = loadAndConfigureTexture("res/o.png", textureShader, "uTex", 0);
+    unsigned textureV = loadAndConfigureTexture("res/v.png", textureShader, "uTex", 0);
+    unsigned textureC = loadAndConfigureTexture("res/c.png", textureShader, "uTex", 0);
+    unsigned textureS = loadAndConfigureTexture("res/s.png", textureShader, "uTex", 0);
+    unsigned textureD = loadAndConfigureTexture("res/d.png", textureShader, "uTex", 0);
+    unsigned textureE = loadAndConfigureTexture("res/e.png", textureShader, "uTex", 0);
+    unsigned textureT = loadAndConfigureTexture("res/t.png", textureShader, "uTex", 0);
+    unsigned textureR = loadAndConfigureTexture("res/r.png", textureShader, "uTex", 0);
+    unsigned mapTexture = loadAndConfigureTexture("res/majevica.jpg", mapShader, "uTex", 0);
 
-
-    // 1 texture
-    unsigned texture1 = loadImageToTexture("res/1.png");
-    glBindTexture(GL_TEXTURE_2D, texture1);
-    glGenerateMipmap(GL_TEXTURE_2D);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    glBindTexture(GL_TEXTURE_2D, 0);
-    glUseProgram(textureShader);
-    unsigned uTexLoc = glGetUniformLocation(textureShader, "uTex");
-    glUniform1i(uTexLoc, 0);
-    glUseProgram(0);
-    // 2 texture
-    unsigned texture2 = loadImageToTexture("res/2.png");
-    glBindTexture(GL_TEXTURE_2D, texture2);
-    glGenerateMipmap(GL_TEXTURE_2D);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    glBindTexture(GL_TEXTURE_2D, 0);
-    glUseProgram(textureShader);
-    glUniform1i(uTexLoc, 0);
-    glUseProgram(0);
-    // 3 texture
-    unsigned texture3 = loadImageToTexture("res/3.png");
-    glBindTexture(GL_TEXTURE_2D, texture3);
-    glGenerateMipmap(GL_TEXTURE_2D);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    glBindTexture(GL_TEXTURE_2D, 0);
-    glUseProgram(textureShader);
-    glUniform1i(uTexLoc, 0);
-    glUseProgram(0);
-    // 4 texture
-    unsigned texture4 = loadImageToTexture("res/4.png");
-    glBindTexture(GL_TEXTURE_2D, texture4);
-    glGenerateMipmap(GL_TEXTURE_2D);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    glBindTexture(GL_TEXTURE_2D, 0);
-    glUseProgram(textureShader);
-    glUniform1i(uTexLoc, 0);
-    glUseProgram(0);
-    // 5 texture
-    unsigned texture5 = loadImageToTexture("res/5.png");
-    glBindTexture(GL_TEXTURE_2D, texture5);
-    glGenerateMipmap(GL_TEXTURE_2D);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    glBindTexture(GL_TEXTURE_2D, 0);
-    glUseProgram(textureShader);
-    glUniform1i(uTexLoc, 0);
-    glUseProgram(0);
-    // 6 texture
-    unsigned texture6 = loadImageToTexture("res/6.png");
-    glBindTexture(GL_TEXTURE_2D, texture6);
-    glGenerateMipmap(GL_TEXTURE_2D);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    glBindTexture(GL_TEXTURE_2D, 0);
-    glUseProgram(textureShader);
-    glUniform1i(uTexLoc, 0);
-    glUseProgram(0);
-    // 7 texture
-    unsigned texture7 = loadImageToTexture("res/7.png");
-    glBindTexture(GL_TEXTURE_2D, texture7);
-    glGenerateMipmap(GL_TEXTURE_2D);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    glBindTexture(GL_TEXTURE_2D, 0);
-    glUseProgram(textureShader);
-    glUniform1i(uTexLoc, 0);
-    glUseProgram(0);
-    // 8 texture
-    unsigned texture8 = loadImageToTexture("res/8.png");
-    glBindTexture(GL_TEXTURE_2D, texture8);
-    glGenerateMipmap(GL_TEXTURE_2D);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    glBindTexture(GL_TEXTURE_2D, 0);
-    glUseProgram(textureShader);
-    glUniform1i(uTexLoc, 0);
-    glUseProgram(0);
-    // 9 texture
-    unsigned texture9 = loadImageToTexture("res/9.png");
-    glBindTexture(GL_TEXTURE_2D, texture9);
-    glGenerateMipmap(GL_TEXTURE_2D);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    glBindTexture(GL_TEXTURE_2D, 0);
-    glUseProgram(textureShader);
-    glUniform1i(uTexLoc, 0);
-    glUseProgram(0);
-    // 0 texture
-    unsigned texture0 = loadImageToTexture("res/0.png");
-    glBindTexture(GL_TEXTURE_2D, texture0);
-    glGenerateMipmap(GL_TEXTURE_2D);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    glBindTexture(GL_TEXTURE_2D, 0);
-    glUseProgram(textureShader);
-    glUniform1i(uTexLoc, 0);
-    glUseProgram(0);
-    // x texture
-    unsigned texturex = loadImageToTexture("res/x.png");
-    glBindTexture(GL_TEXTURE_2D, texturex);
-    glGenerateMipmap(GL_TEXTURE_2D);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    glBindTexture(GL_TEXTURE_2D, 0);
-    glUseProgram(textureShader);
-    glUniform1i(uTexLoc, 0);
-    glUseProgram(0);
-    // y texture
-    unsigned texturey = loadImageToTexture("res/y.png");
-    glBindTexture(GL_TEXTURE_2D, texturey);
-    glGenerateMipmap(GL_TEXTURE_2D);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    glBindTexture(GL_TEXTURE_2D, 0);
-    glUseProgram(textureShader);
-    glUniform1i(uTexLoc, 0);
-    glUseProgram(0);
-    // dot texture
-    unsigned textureDot = loadImageToTexture("res/dot.png");
-    glBindTexture(GL_TEXTURE_2D, textureDot);
-    glGenerateMipmap(GL_TEXTURE_2D);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    glBindTexture(GL_TEXTURE_2D, 0);
-    glUseProgram(textureShader);
-    glUniform1i(uTexLoc, 0);
-    glUseProgram(0);
-    // minus texture
-    unsigned textureMinus = loadImageToTexture("res/minus.png");
-    glBindTexture(GL_TEXTURE_2D, textureMinus);
-    glGenerateMipmap(GL_TEXTURE_2D);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    glBindTexture(GL_TEXTURE_2D, 0);
-    glUseProgram(textureShader);
-    glUniform1i(uTexLoc, 0);
-    glUseProgram(0);
-    // m texture
-    unsigned texturem = loadImageToTexture("res/m.png");
-    glBindTexture(GL_TEXTURE_2D, texturem);
-    glGenerateMipmap(GL_TEXTURE_2D);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    glBindTexture(GL_TEXTURE_2D, 0);
-    glUseProgram(textureShader);
-    glUniform1i(uTexLoc, 0);
-    glUseProgram(0);
-    // i texture
-    unsigned texturei = loadImageToTexture("res/i.png");
-    glBindTexture(GL_TEXTURE_2D, texturei);
-    glGenerateMipmap(GL_TEXTURE_2D);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    glBindTexture(GL_TEXTURE_2D, 0);
-    glUseProgram(textureShader);
-    glUniform1i(uTexLoc, 0);
-    glUseProgram(0);
-    // l texture
-    unsigned texturel = loadImageToTexture("res/l.png");
-    glBindTexture(GL_TEXTURE_2D, texturel);
-    glGenerateMipmap(GL_TEXTURE_2D);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    glBindTexture(GL_TEXTURE_2D, 0);
-    glUseProgram(textureShader);
-    glUniform1i(uTexLoc, 0);
-    glUseProgram(0);
-    // a texture
-    unsigned texturea = loadImageToTexture("res/a.png");
-    glBindTexture(GL_TEXTURE_2D, texturea);
-    glGenerateMipmap(GL_TEXTURE_2D);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    glBindTexture(GL_TEXTURE_2D, 0);
-    glUseProgram(textureShader);
-    glUniform1i(uTexLoc, 0);
-    glUseProgram(0);
-    // o texture
-    unsigned textureo = loadImageToTexture("res/o.png");
-    glBindTexture(GL_TEXTURE_2D, textureo);
-    glGenerateMipmap(GL_TEXTURE_2D);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    glBindTexture(GL_TEXTURE_2D, 0);
-    glUseProgram(textureShader);
-    glUniform1i(uTexLoc, 0);
-    glUseProgram(0);
-    // v texture
-    unsigned texturev = loadImageToTexture("res/v.png");
-    glBindTexture(GL_TEXTURE_2D, texturev);
-    glGenerateMipmap(GL_TEXTURE_2D);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    glBindTexture(GL_TEXTURE_2D, 0);
-    glUseProgram(textureShader);
-    glUniform1i(uTexLoc, 0);
-    glUseProgram(0);
-    // c texture
-    unsigned texturec = loadImageToTexture("res/c.png");
-    glBindTexture(GL_TEXTURE_2D, texturec);
-    glGenerateMipmap(GL_TEXTURE_2D);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    glBindTexture(GL_TEXTURE_2D, 0);
-    glUseProgram(textureShader);
-    glUniform1i(uTexLoc, 0);
-    glUseProgram(0);
-    // s texture
-    unsigned textures = loadImageToTexture("res/s.png");
-    glBindTexture(GL_TEXTURE_2D, textures);
-    glGenerateMipmap(GL_TEXTURE_2D);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    glBindTexture(GL_TEXTURE_2D, 0);
-    glUseProgram(textureShader);
-    glUniform1i(uTexLoc, 0);
-    glUseProgram(0);
-    // d texture
-    unsigned textured = loadImageToTexture("res/d.png");
-    glBindTexture(GL_TEXTURE_2D, textured);
-    glGenerateMipmap(GL_TEXTURE_2D);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    glBindTexture(GL_TEXTURE_2D, 0);
-    glUseProgram(textureShader);
-    glUniform1i(uTexLoc, 0);
-    glUseProgram(0);
-    // e texture
-    unsigned texturee = loadImageToTexture("res/e.png");
-    glBindTexture(GL_TEXTURE_2D, texturee);
-    glGenerateMipmap(GL_TEXTURE_2D);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    glBindTexture(GL_TEXTURE_2D, 0);
-    glUseProgram(textureShader);
-    glUniform1i(uTexLoc, 0);
-    glUseProgram(0);
-    // t texture
-    unsigned texturet = loadImageToTexture("res/t.png");
-    glBindTexture(GL_TEXTURE_2D, texturet);
-    glGenerateMipmap(GL_TEXTURE_2D);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    glBindTexture(GL_TEXTURE_2D, 0);
-    glUseProgram(textureShader);
-    glUniform1i(uTexLoc, 0);
-    glUseProgram(0);
-    // r texture
-    unsigned texturer = loadImageToTexture("res/r.png");
-    glBindTexture(GL_TEXTURE_2D, texturer);
-    glGenerateMipmap(GL_TEXTURE_2D);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    glBindTexture(GL_TEXTURE_2D, 0);
-    glUseProgram(textureShader);
-    glUniform1i(uTexLoc, 0);
-    glUseProgram(0);
-    //map texture
-    unsigned mapTexture = loadImageToTexture("res/majevica.jpg");
-    glBindTexture(GL_TEXTURE_2D, mapTexture);
-    glGenerateMipmap(GL_TEXTURE_2D);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    glBindTexture(GL_TEXTURE_2D, 0);
-    glUseProgram(textureShader);
-    glUniform1i(uTexLoc, 0);
-    glUseProgram(0);
 
 
     // ++++++++++++++++++++++++++++++++++++++++++++++++++++++            UNIFORME            +++++++++++++++++++++++++++++++++++++++++++++++++
@@ -2923,7 +2369,7 @@ int main(void)
         shaderProgram.setMat4("model", glm::mat4(1.0f));
 
         //map texture
-        glUseProgram(textureShader);
+        glUseProgram(mapShader);
         glActiveTexture(GL_TEXTURE0);
         glBindTexture(GL_TEXTURE_2D, mapTexture);
         glBindVertexArray(VAO);
@@ -2993,6 +2439,10 @@ int main(void)
         glBindVertexArray(progressVAO2);
         glDrawElements(GL_TRIANGLES, 12, GL_UNSIGNED_INT, 0);
 
+        glEnable(GL_BLEND);
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+        glDisable(GL_DEPTH_TEST);
+
 
         int hundreds, tens, ones;
         int battery = static_cast<int>(round(drone1.batteryLevel));
@@ -3002,6 +2452,7 @@ int main(void)
 
         // Draw hundreds digit for Drone 1
         glUseProgram(textureShader);
+        glActiveTexture(GL_TEXTURE0);
         switch (hundreds) {
         case 0: {
             break;
@@ -3047,6 +2498,7 @@ int main(void)
         if (hundreds != 0) {
             glBindVertexArray(batteryVao1[0]);
             glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+            glBindVertexArray(0);
         }
         // Draw tens digit for Drone 1
         switch (tens) {
@@ -3094,6 +2546,7 @@ int main(void)
         }
         glBindVertexArray(batteryVao1[1]);
         glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+        glBindVertexArray(0);
 
         // Draw ones digit for Drone 1
         switch (ones) {
@@ -3141,6 +2594,7 @@ int main(void)
         }
         glBindVertexArray(batteryVao1[2]);
         glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+        glBindVertexArray(0);
 
         // Process battery level for Drone 2
         battery = static_cast<int>(round(drone2.batteryLevel));
@@ -3294,7 +2748,7 @@ int main(void)
 
         //coordinates
         // x for drone 1
-        glBindTexture(GL_TEXTURE_2D, texturex);
+        glBindTexture(GL_TEXTURE_2D, textureX);
         glBindVertexArray(coordinatesVao1[0]);
         glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
         // : for x for drone 1
@@ -3430,7 +2884,7 @@ int main(void)
         }
 
         // y for drone 1
-        glBindTexture(GL_TEXTURE_2D, texturey);
+        glBindTexture(GL_TEXTURE_2D, textureY);
         glBindVertexArray(coordinatesVao1y[0]);
         glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
         // : for y for drone 1
@@ -3566,7 +3020,7 @@ int main(void)
         }
 
         // x for drone 2
-        glBindTexture(GL_TEXTURE_2D, texturex);
+        glBindTexture(GL_TEXTURE_2D, textureX);
         glBindVertexArray(coordinatesVao2[0]);
         glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
         glBindVertexArray(0);
@@ -3703,7 +3157,7 @@ int main(void)
         }
 
         // y for drone 2
-        glBindTexture(GL_TEXTURE_2D, texturey);
+        glBindTexture(GL_TEXTURE_2D, textureY);
         glBindVertexArray(coordinatesVao2y[0]);
         glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
         // : for y for drone 2
@@ -3840,55 +3294,55 @@ int main(void)
 
         //IME I PREZIME
         //m
-        glBindTexture(GL_TEXTURE_2D, texturem);
+        glBindTexture(GL_TEXTURE_2D, textureM);
         glBindVertexArray(nameVao[0]);
         glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
         //i
-        glBindTexture(GL_TEXTURE_2D, texturei);
+        glBindTexture(GL_TEXTURE_2D, textureI);
         glBindVertexArray(nameVao[1]);
         glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
         //l
-        glBindTexture(GL_TEXTURE_2D, texturel);
+        glBindTexture(GL_TEXTURE_2D, textureL);
         glBindVertexArray(nameVao[2]);
         glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
         //a
-        glBindTexture(GL_TEXTURE_2D, texturea);
+        glBindTexture(GL_TEXTURE_2D, textureA);
         glBindVertexArray(nameVao[3]);
         glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
         //m
-        glBindTexture(GL_TEXTURE_2D, texturem);
+        glBindTexture(GL_TEXTURE_2D, textureM);
         glBindVertexArray(nameVao[4]);
         glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
         //i
-        glBindTexture(GL_TEXTURE_2D, texturei);
+        glBindTexture(GL_TEXTURE_2D, textureI);
         glBindVertexArray(nameVao[5]);
         glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
         //l
-        glBindTexture(GL_TEXTURE_2D, texturel);
+        glBindTexture(GL_TEXTURE_2D, textureL);
         glBindVertexArray(nameVao[6]);
         glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
         //o
-        glBindTexture(GL_TEXTURE_2D, textureo);
+        glBindTexture(GL_TEXTURE_2D, textureO);
         glBindVertexArray(nameVao[7]);
         glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
         //v
-        glBindTexture(GL_TEXTURE_2D, texturev);
+        glBindTexture(GL_TEXTURE_2D, textureV);
         glBindVertexArray(nameVao[8]);
         glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
         //i
-        glBindTexture(GL_TEXTURE_2D, texturei);
+        glBindTexture(GL_TEXTURE_2D, textureI);
         glBindVertexArray(nameVao[9]);
         glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
         //c
-        glBindTexture(GL_TEXTURE_2D, texturec);
+        glBindTexture(GL_TEXTURE_2D, textureC);
         glBindVertexArray(nameVao[10]);
         glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
         //s
-        glBindTexture(GL_TEXTURE_2D, textures);
+        glBindTexture(GL_TEXTURE_2D, textureS);
         glBindVertexArray(indexVao[0]);
         glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
         //v
-        glBindTexture(GL_TEXTURE_2D, texturev);
+        glBindTexture(GL_TEXTURE_2D, textureV);
         glBindVertexArray(indexVao[1]);
         glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
         //2
@@ -3924,78 +3378,78 @@ int main(void)
         //DESTROYED 1
         if (drone1.destroyed) {
             //d
-            glBindTexture(GL_TEXTURE_2D, textured);
+            glBindTexture(GL_TEXTURE_2D, textureD);
             glBindVertexArray(destroyedVao1[0]);
             glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
             //e
-            glBindTexture(GL_TEXTURE_2D, texturee);
+            glBindTexture(GL_TEXTURE_2D, textureE);
             glBindVertexArray(destroyedVao1[1]);
             glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
             //s
-            glBindTexture(GL_TEXTURE_2D, textures);
+            glBindTexture(GL_TEXTURE_2D, textureS);
             glBindVertexArray(destroyedVao1[2]);
             glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
             //t
-            glBindTexture(GL_TEXTURE_2D, texturet);
+            glBindTexture(GL_TEXTURE_2D, textureT);
             glBindVertexArray(destroyedVao1[3]);
             glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
             //r
-            glBindTexture(GL_TEXTURE_2D, texturer);
+            glBindTexture(GL_TEXTURE_2D, textureR);
             glBindVertexArray(destroyedVao1[4]);
             glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
             //o
-            glBindTexture(GL_TEXTURE_2D, textureo);
+            glBindTexture(GL_TEXTURE_2D, textureO);
             glBindVertexArray(destroyedVao1[5]);
             glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
             //y
-            glBindTexture(GL_TEXTURE_2D, texturey);
+            glBindTexture(GL_TEXTURE_2D, textureY);
             glBindVertexArray(destroyedVao1[6]);
             glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
             //e
-            glBindTexture(GL_TEXTURE_2D, texturee);
+            glBindTexture(GL_TEXTURE_2D, textureE);
             glBindVertexArray(destroyedVao1[7]);
             glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
             //d
-            glBindTexture(GL_TEXTURE_2D, textured);
+            glBindTexture(GL_TEXTURE_2D, textureD);
             glBindVertexArray(destroyedVao1[8]);
             glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
         }
         //DESTROYED 2
         if (drone2.destroyed) {
             //d
-            glBindTexture(GL_TEXTURE_2D, textured);
+            glBindTexture(GL_TEXTURE_2D, textureD);
             glBindVertexArray(destroyedVao2[0]);
             glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
             //e
-            glBindTexture(GL_TEXTURE_2D, texturee);
+            glBindTexture(GL_TEXTURE_2D, textureE);
             glBindVertexArray(destroyedVao2[1]);
             glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
             //s
-            glBindTexture(GL_TEXTURE_2D, textures);
+            glBindTexture(GL_TEXTURE_2D, textureS);
             glBindVertexArray(destroyedVao2[2]);
             glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
             //t
-            glBindTexture(GL_TEXTURE_2D, texturet);
+            glBindTexture(GL_TEXTURE_2D, textureT);
             glBindVertexArray(destroyedVao2[3]);
             glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
             //r
-            glBindTexture(GL_TEXTURE_2D, texturer);
+            glBindTexture(GL_TEXTURE_2D, textureR);
             glBindVertexArray(destroyedVao2[4]);
             glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
             //o
-            glBindTexture(GL_TEXTURE_2D, textureo);
+            glBindTexture(GL_TEXTURE_2D, textureO);
             glBindVertexArray(destroyedVao2[5]);
             glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
             //y
-            glBindTexture(GL_TEXTURE_2D, texturey);
+            glBindTexture(GL_TEXTURE_2D, textureY);
             glBindVertexArray(destroyedVao2[6]);
             glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
             //e
-            glBindTexture(GL_TEXTURE_2D, texturee);
+            glBindTexture(GL_TEXTURE_2D, textureE);
             glBindVertexArray(destroyedVao2[7]);
             glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
             //d
-            glBindTexture(GL_TEXTURE_2D, textured);
+            glBindTexture(GL_TEXTURE_2D, textureD);
             glBindVertexArray(destroyedVao2[8]);
             glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
         }
@@ -4014,6 +3468,7 @@ int main(void)
 
     glDeleteProgram(unifiedShader);
     glDeleteProgram(textureShader);
+    glDeleteProgram(mapShader);
 
     glDeleteTextures(1, &mapTexture);
     glDeleteBuffers(1, &VBO);
