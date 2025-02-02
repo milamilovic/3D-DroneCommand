@@ -71,6 +71,40 @@ void createVAO(unsigned int& VAO, unsigned int& VBO, unsigned int& EBO,
     glBindVertexArray(0);
 }
 
+void drawDigit(int index, int digit, GLuint texture0, GLuint texture1, GLuint texture2, GLuint texture3, GLuint texture4, GLuint texture5, GLuint texture6, GLuint texture7, GLuint texture8, GLuint texture9, GLuint* vao) {
+    GLuint texture;
+
+    switch (digit) {
+    case 0: texture = texture0; break;
+    case 1: texture = texture1; break;
+    case 2: texture = texture2; break;
+    case 3: texture = texture3; break;
+    case 4: texture = texture4; break;
+    case 5: texture = texture5; break;
+    case 6: texture = texture6; break;
+    case 7: texture = texture7; break;
+    case 8: texture = texture8; break;
+    case 9: texture = texture9; break;
+    default: texture = texture0; // Fallback to 0 if digit is out of bounds
+    }
+
+    glBindTexture(GL_TEXTURE_2D, texture);
+    glBindVertexArray(vao[index]);
+    glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+    glBindVertexArray(0);
+}
+
+void drawBattery(int battery, GLuint texture0, GLuint texture1, GLuint texture2, GLuint texture3, GLuint texture4, GLuint texture5, GLuint texture6, GLuint texture7, GLuint texture8, GLuint texture9, GLuint* vao) {
+    int hundreds = battery / 100;
+    int tens = (battery / 10) % 10;
+    int ones = battery % 10;
+
+    if (hundreds != 0) {
+        drawDigit(0, hundreds, texture0, texture1, texture2, texture3, texture4, texture5, texture6, texture7, texture8, texture9, vao);
+    }
+    drawDigit(1, tens, texture0, texture1, texture2, texture3, texture4, texture5, texture6, texture7, texture8, texture9, vao);
+    drawDigit(2, ones, texture0, texture1, texture2, texture3, texture4, texture5, texture6, texture7, texture8, texture9, vao);
+}
 
 struct Drone {
     float x, y;
@@ -1732,307 +1766,15 @@ int main(void)
         glDrawElements(GL_TRIANGLES, 12, GL_UNSIGNED_INT, 0);
 
 
-        int hundreds, tens, ones;
-        int battery = static_cast<int>(round(drone1.batteryLevel));
-        hundreds = battery / 100;
-        tens = (battery / 10) % 10;
-        ones = battery % 10;
-
-        // Draw hundreds digit for Drone 1
         glUseProgram(textureShader);
-        glActiveTexture(GL_TEXTURE0);
-        switch (hundreds) {
-        case 0: {
-            break;
-        }
-        case 1: {
-            glBindTexture(GL_TEXTURE_2D, texture1);
-            break;
-        }
-        case 2: {
-            glBindTexture(GL_TEXTURE_2D, texture2);
-            break;
-        }
-        case 3: {
-            glBindTexture(GL_TEXTURE_2D, texture3);
-            break;
-        }
-        case 4: {
-            glBindTexture(GL_TEXTURE_2D, texture4);
-            break;
-        }
-        case 5: {
-            glBindTexture(GL_TEXTURE_2D, texture5);
-            break;
-        }
-        case 6: {
-            glBindTexture(GL_TEXTURE_2D, texture6);
-            break;
-        }
-        case 7: {
-            glBindTexture(GL_TEXTURE_2D, texture7);
-            break;
-        }
-        case 8: {
-            glBindTexture(GL_TEXTURE_2D, texture8);
-            break;
-        }
-        case 9: {
-            glBindTexture(GL_TEXTURE_2D, texture9);
-            break;
-        }
-        default: glBindTexture(GL_TEXTURE_2D, texture0); // Fallback, should not occur
-        }
-        if (hundreds != 0) {
-            glBindVertexArray(batteryVao1[0]);
-            glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
-            glBindVertexArray(0);
-        }
-        // Draw tens digit for Drone 1
-        switch (tens) {
-        case 0: {
-            glBindTexture(GL_TEXTURE_2D, texture0);
-            break;
-        }
-        case 1: {
-            glBindTexture(GL_TEXTURE_2D, texture1);
-            break;
-        }
-        case 2: {
-            glBindTexture(GL_TEXTURE_2D, texture2);
-            break;
-        }
-        case 3: {
-            glBindTexture(GL_TEXTURE_2D, texture3);
-            break;
-        }
-        case 4: {
-            glBindTexture(GL_TEXTURE_2D, texture4);
-            break;
-        }
-        case 5: {
-            glBindTexture(GL_TEXTURE_2D, texture5);
-            break;
-        }
-        case 6: {
-            glBindTexture(GL_TEXTURE_2D, texture6);
-            break;
-        }
-        case 7: {
-            glBindTexture(GL_TEXTURE_2D, texture7);
-            break;
-        }
-        case 8: {
-            glBindTexture(GL_TEXTURE_2D, texture8);
-            break;
-        }
-        case 9: {
-            glBindTexture(GL_TEXTURE_2D, texture9);
-            break;
-        }
-        default: glBindTexture(GL_TEXTURE_2D, texture0); // Fallback, should not occur
-        }
-        glBindVertexArray(batteryVao1[1]);
-        glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
-        glBindVertexArray(0);
 
-        // Draw ones digit for Drone 1
-        switch (ones) {
-        case 0: {
-            glBindTexture(GL_TEXTURE_2D, texture0);
-            break;
-        }
-        case 1: {
-            glBindTexture(GL_TEXTURE_2D, texture1);
-            break;
-        }
-        case 2: {
-            glBindTexture(GL_TEXTURE_2D, texture2);
-            break;
-        }
-        case 3: {
-            glBindTexture(GL_TEXTURE_2D, texture3);
-            break;
-        }
-        case 4: {
-            glBindTexture(GL_TEXTURE_2D, texture4);
-            break;
-        }
-        case 5: {
-            glBindTexture(GL_TEXTURE_2D, texture5);
-            break;
-        }
-        case 6: {
-            glBindTexture(GL_TEXTURE_2D, texture6);
-            break;
-        }
-        case 7: {
-            glBindTexture(GL_TEXTURE_2D, texture7);
-            break;
-        }
-        case 8: {
-            glBindTexture(GL_TEXTURE_2D, texture8);
-            break;
-        }
-        case 9: {
-            glBindTexture(GL_TEXTURE_2D, texture9);
-            break;
-        }
-        default: glBindTexture(GL_TEXTURE_2D, texture0); // Fallback, should not occur
-        }
-        glBindVertexArray(batteryVao1[2]);
-        glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
-        glBindVertexArray(0);
+        // battery level for drone 1
+        int battery1 = static_cast<int>(round(drone1.batteryLevel));
+        drawBattery(battery1, texture0, texture1, texture2, texture3, texture4, texture5, texture6, texture7, texture8, texture9, batteryVao1);
 
         // Process battery level for Drone 2
-        battery = static_cast<int>(round(drone2.batteryLevel));
-        hundreds = battery / 100;
-        tens = (battery / 10) % 10;
-        ones = battery % 10;
-
-        // Draw hundreds digit for Drone 2
-        switch (hundreds) {
-        case 0: {
-            //glBindTexture(GL_TEXTURE_2D, texture0);
-            break;
-        }
-        case 1: {
-            glBindTexture(GL_TEXTURE_2D, texture1);
-            break;
-        }
-        case 2: {
-            glBindTexture(GL_TEXTURE_2D, texture2);
-            break;
-        }
-        case 3: {
-            glBindTexture(GL_TEXTURE_2D, texture3);
-            break;
-        }
-        case 4: {
-            glBindTexture(GL_TEXTURE_2D, texture4);
-            break;
-        }
-        case 5: {
-            glBindTexture(GL_TEXTURE_2D, texture5);
-            break;
-        }
-        case 6: {
-            glBindTexture(GL_TEXTURE_2D, texture6);
-            break;
-        }
-        case 7: {
-            glBindTexture(GL_TEXTURE_2D, texture7);
-            break;
-        }
-        case 8: {
-            glBindTexture(GL_TEXTURE_2D, texture8);
-            break;
-        }
-        case 9: {
-            glBindTexture(GL_TEXTURE_2D, texture9);
-            break;
-        }
-        default: glBindTexture(GL_TEXTURE_2D, texture0); // Fallback, should not occur
-        }
-
-        if (hundreds != 0) {
-            glBindVertexArray(batteryVao2[0]);
-            glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
-        }
-
-        // Draw tens digit for Drone 2
-        switch (tens) {
-        case 0: {
-            glBindTexture(GL_TEXTURE_2D, texture0);
-            break;
-        }
-        case 1: {
-            glBindTexture(GL_TEXTURE_2D, texture1);
-            break;
-        }
-        case 2: {
-            glBindTexture(GL_TEXTURE_2D, texture2);
-            break;
-        }
-        case 3: {
-            glBindTexture(GL_TEXTURE_2D, texture3);
-            break;
-        }
-        case 4: {
-            glBindTexture(GL_TEXTURE_2D, texture4);
-            break;
-        }
-        case 5: {
-            glBindTexture(GL_TEXTURE_2D, texture5);
-            break;
-        }
-        case 6: {
-            glBindTexture(GL_TEXTURE_2D, texture6);
-            break;
-        }
-        case 7: {
-            glBindTexture(GL_TEXTURE_2D, texture7);
-            break;
-        }
-        case 8: {
-            glBindTexture(GL_TEXTURE_2D, texture8);
-            break;
-        }
-        case 9: {
-            glBindTexture(GL_TEXTURE_2D, texture9);
-            break;
-        }
-        default: glBindTexture(GL_TEXTURE_2D, texture0); // Fallback, should not occur
-        }
-        glBindVertexArray(batteryVao2[1]);
-        glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
-
-        // Draw ones digit for Drone 2
-        switch (ones) {
-        case 0: {
-            glBindTexture(GL_TEXTURE_2D, texture0);
-            break;
-        }
-        case 1: {
-            glBindTexture(GL_TEXTURE_2D, texture1);
-            break;
-        }
-        case 2: {
-            glBindTexture(GL_TEXTURE_2D, texture2);
-            break;
-        }
-        case 3: {
-            glBindTexture(GL_TEXTURE_2D, texture3);
-            break;
-        }
-        case 4: {
-            glBindTexture(GL_TEXTURE_2D, texture4);
-            break;
-        }
-        case 5: {
-            glBindTexture(GL_TEXTURE_2D, texture5);
-            break;
-        }
-        case 6: {
-            glBindTexture(GL_TEXTURE_2D, texture6);
-            break;
-        }
-        case 7: {
-            glBindTexture(GL_TEXTURE_2D, texture7);
-            break;
-        }
-        case 8: {
-            glBindTexture(GL_TEXTURE_2D, texture8);
-            break;
-        }
-        case 9: {
-            glBindTexture(GL_TEXTURE_2D, texture9);
-            break;
-        }
-        default: glBindTexture(GL_TEXTURE_2D, texture0); // Fallback, should not occur
-        }
-        glBindVertexArray(batteryVao2[2]);
-        glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+        int battery2 = static_cast<int>(round(drone2.batteryLevel));
+        drawBattery(battery2, texture0, texture1, texture2, texture3, texture4, texture5, texture6, texture7, texture8, texture9, batteryVao2);
 
         //coordinates
         // x for drone 1
@@ -2078,97 +1820,8 @@ int main(void)
             int precise = static_cast<int>(round(scaledX));
             int first = (precise / 10) % 10;
             int second = precise % 10;
-            switch (first) {
-            case 0: {
-                glBindTexture(GL_TEXTURE_2D, texture0);
-                break;
-            }
-            case 1: {
-                glBindTexture(GL_TEXTURE_2D, texture1);
-                break;
-            }
-            case 2: {
-                glBindTexture(GL_TEXTURE_2D, texture2);
-                break;
-            }
-            case 3: {
-                glBindTexture(GL_TEXTURE_2D, texture3);
-                break;
-            }
-            case 4: {
-                glBindTexture(GL_TEXTURE_2D, texture4);
-                break;
-            }
-            case 5: {
-                glBindTexture(GL_TEXTURE_2D, texture5);
-                break;
-            }
-            case 6: {
-                glBindTexture(GL_TEXTURE_2D, texture6);
-                break;
-            }
-            case 7: {
-                glBindTexture(GL_TEXTURE_2D, texture7);
-                break;
-            }
-            case 8: {
-                glBindTexture(GL_TEXTURE_2D, texture8);
-                break;
-            }
-            case 9: {
-                glBindTexture(GL_TEXTURE_2D, texture9);
-                break;
-            }
-            default: glBindTexture(GL_TEXTURE_2D, texture0); // Fallback, should not occur
-            }
-            glBindVertexArray(coordinatesVao1[6]);
-            glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
-            // num3 for x for drone 1
-            switch (second) {
-            case 0: {
-                glBindTexture(GL_TEXTURE_2D, texture0);
-                break;
-            }
-            case 1: {
-                glBindTexture(GL_TEXTURE_2D, texture1);
-                break;
-            }
-            case 2: {
-                glBindTexture(GL_TEXTURE_2D, texture2);
-                break;
-            }
-            case 3: {
-                glBindTexture(GL_TEXTURE_2D, texture3);
-                break;
-            }
-            case 4: {
-                glBindTexture(GL_TEXTURE_2D, texture4);
-                break;
-            }
-            case 5: {
-                glBindTexture(GL_TEXTURE_2D, texture5);
-                break;
-            }
-            case 6: {
-                glBindTexture(GL_TEXTURE_2D, texture6);
-                break;
-            }
-            case 7: {
-                glBindTexture(GL_TEXTURE_2D, texture7);
-                break;
-            }
-            case 8: {
-                glBindTexture(GL_TEXTURE_2D, texture8);
-                break;
-            }
-            case 9: {
-                glBindTexture(GL_TEXTURE_2D, texture9);
-                break;
-            }
-            default: glBindTexture(GL_TEXTURE_2D, texture0); // Fallback, should not occur
-            }
-            glBindVertexArray(coordinatesVao1[7]);
-            glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+            drawDigit(6, first, texture0, texture1, texture2, texture3, texture4, texture5, texture6, texture7, texture8, texture9, coordinatesVao1);
+            drawDigit(7, second, texture0, texture1, texture2, texture3, texture4, texture5, texture6, texture7, texture8, texture9, coordinatesVao1);
         }
 
         // y for drone 1
@@ -2214,97 +1867,8 @@ int main(void)
             int precise = static_cast<int>(round(scaledY));
             int first = (precise / 10) % 10;
             int second = precise % 10;
-            switch (first) {
-            case 0: {
-                glBindTexture(GL_TEXTURE_2D, texture0);
-                break;
-            }
-            case 1: {
-                glBindTexture(GL_TEXTURE_2D, texture1);
-                break;
-            }
-            case 2: {
-                glBindTexture(GL_TEXTURE_2D, texture2);
-                break;
-            }
-            case 3: {
-                glBindTexture(GL_TEXTURE_2D, texture3);
-                break;
-            }
-            case 4: {
-                glBindTexture(GL_TEXTURE_2D, texture4);
-                break;
-            }
-            case 5: {
-                glBindTexture(GL_TEXTURE_2D, texture5);
-                break;
-            }
-            case 6: {
-                glBindTexture(GL_TEXTURE_2D, texture6);
-                break;
-            }
-            case 7: {
-                glBindTexture(GL_TEXTURE_2D, texture7);
-                break;
-            }
-            case 8: {
-                glBindTexture(GL_TEXTURE_2D, texture8);
-                break;
-            }
-            case 9: {
-                glBindTexture(GL_TEXTURE_2D, texture9);
-                break;
-            }
-            default: glBindTexture(GL_TEXTURE_2D, texture0); // Fallback, should not occur
-            }
-            glBindVertexArray(coordinatesVao1y[6]);
-            glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
-            // num3 for x for drone 1
-            switch (second) {
-            case 0: {
-                glBindTexture(GL_TEXTURE_2D, texture0);
-                break;
-            }
-            case 1: {
-                glBindTexture(GL_TEXTURE_2D, texture1);
-                break;
-            }
-            case 2: {
-                glBindTexture(GL_TEXTURE_2D, texture2);
-                break;
-            }
-            case 3: {
-                glBindTexture(GL_TEXTURE_2D, texture3);
-                break;
-            }
-            case 4: {
-                glBindTexture(GL_TEXTURE_2D, texture4);
-                break;
-            }
-            case 5: {
-                glBindTexture(GL_TEXTURE_2D, texture5);
-                break;
-            }
-            case 6: {
-                glBindTexture(GL_TEXTURE_2D, texture6);
-                break;
-            }
-            case 7: {
-                glBindTexture(GL_TEXTURE_2D, texture7);
-                break;
-            }
-            case 8: {
-                glBindTexture(GL_TEXTURE_2D, texture8);
-                break;
-            }
-            case 9: {
-                glBindTexture(GL_TEXTURE_2D, texture9);
-                break;
-            }
-            default: glBindTexture(GL_TEXTURE_2D, texture0); // Fallback, should not occur
-            }
-            glBindVertexArray(coordinatesVao1y[7]);
-            glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+            drawDigit(6, first, texture0, texture1, texture2, texture3, texture4, texture5, texture6, texture7, texture8, texture9, coordinatesVao1y);
+            drawDigit(7, second, texture0, texture1, texture2, texture3, texture4, texture5, texture6, texture7, texture8, texture9, coordinatesVao1y);
         }
 
         // x for drone 2
@@ -2351,97 +1915,9 @@ int main(void)
             int precise = static_cast<int>(round(scaledX));
             int first = (precise / 10) % 10;
             int second = precise % 10;
-            switch (first) {
-            case 0: {
-                glBindTexture(GL_TEXTURE_2D, texture0);
-                break;
-            }
-            case 1: {
-                glBindTexture(GL_TEXTURE_2D, texture1);
-                break;
-            }
-            case 2: {
-                glBindTexture(GL_TEXTURE_2D, texture2);
-                break;
-            }
-            case 3: {
-                glBindTexture(GL_TEXTURE_2D, texture3);
-                break;
-            }
-            case 4: {
-                glBindTexture(GL_TEXTURE_2D, texture4);
-                break;
-            }
-            case 5: {
-                glBindTexture(GL_TEXTURE_2D, texture5);
-                break;
-            }
-            case 6: {
-                glBindTexture(GL_TEXTURE_2D, texture6);
-                break;
-            }
-            case 7: {
-                glBindTexture(GL_TEXTURE_2D, texture7);
-                break;
-            }
-            case 8: {
-                glBindTexture(GL_TEXTURE_2D, texture8);
-                break;
-            }
-            case 9: {
-                glBindTexture(GL_TEXTURE_2D, texture9);
-                break;
-            }
-            default: glBindTexture(GL_TEXTURE_2D, texture0); // Fallback, should not occur
-            }
-            glBindVertexArray(coordinatesVao2[6]);
-            glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
-            // num3 for x for drone 2
-            switch (second) {
-            case 0: {
-                glBindTexture(GL_TEXTURE_2D, texture0);
-                break;
-            }
-            case 1: {
-                glBindTexture(GL_TEXTURE_2D, texture1);
-                break;
-            }
-            case 2: {
-                glBindTexture(GL_TEXTURE_2D, texture2);
-                break;
-            }
-            case 3: {
-                glBindTexture(GL_TEXTURE_2D, texture3);
-                break;
-            }
-            case 4: {
-                glBindTexture(GL_TEXTURE_2D, texture4);
-                break;
-            }
-            case 5: {
-                glBindTexture(GL_TEXTURE_2D, texture5);
-                break;
-            }
-            case 6: {
-                glBindTexture(GL_TEXTURE_2D, texture6);
-                break;
-            }
-            case 7: {
-                glBindTexture(GL_TEXTURE_2D, texture7);
-                break;
-            }
-            case 8: {
-                glBindTexture(GL_TEXTURE_2D, texture8);
-                break;
-            }
-            case 9: {
-                glBindTexture(GL_TEXTURE_2D, texture9);
-                break;
-            }
-            default: glBindTexture(GL_TEXTURE_2D, texture0); // Fallback, should not occur
-            }
-            glBindVertexArray(coordinatesVao2[7]);
-            glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+
+            drawDigit(6, first, texture0, texture1, texture2, texture3, texture4, texture5, texture6, texture7, texture8, texture9, coordinatesVao2);
+            drawDigit(7, second, texture0, texture1, texture2, texture3, texture4, texture5, texture6, texture7, texture8, texture9, coordinatesVao2);
         }
 
         // y for drone 2
@@ -2487,97 +1963,9 @@ int main(void)
             int precise = static_cast<int>(round(scaledY));
             int first = (precise / 10) % 10;
             int second = precise % 10;
-            switch (first) {
-            case 0: {
-                glBindTexture(GL_TEXTURE_2D, texture0);
-                break;
-            }
-            case 1: {
-                glBindTexture(GL_TEXTURE_2D, texture1);
-                break;
-            }
-            case 2: {
-                glBindTexture(GL_TEXTURE_2D, texture2);
-                break;
-            }
-            case 3: {
-                glBindTexture(GL_TEXTURE_2D, texture3);
-                break;
-            }
-            case 4: {
-                glBindTexture(GL_TEXTURE_2D, texture4);
-                break;
-            }
-            case 5: {
-                glBindTexture(GL_TEXTURE_2D, texture5);
-                break;
-            }
-            case 6: {
-                glBindTexture(GL_TEXTURE_2D, texture6);
-                break;
-            }
-            case 7: {
-                glBindTexture(GL_TEXTURE_2D, texture7);
-                break;
-            }
-            case 8: {
-                glBindTexture(GL_TEXTURE_2D, texture8);
-                break;
-            }
-            case 9: {
-                glBindTexture(GL_TEXTURE_2D, texture9);
-                break;
-            }
-            default: glBindTexture(GL_TEXTURE_2D, texture0); // Fallback, should not occur
-            }
-            glBindVertexArray(coordinatesVao2y[6]);
-            glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
-            // num3 for x for drone 1
-            switch (second) {
-            case 0: {
-                glBindTexture(GL_TEXTURE_2D, texture0);
-                break;
-            }
-            case 1: {
-                glBindTexture(GL_TEXTURE_2D, texture1);
-                break;
-            }
-            case 2: {
-                glBindTexture(GL_TEXTURE_2D, texture2);
-                break;
-            }
-            case 3: {
-                glBindTexture(GL_TEXTURE_2D, texture3);
-                break;
-            }
-            case 4: {
-                glBindTexture(GL_TEXTURE_2D, texture4);
-                break;
-            }
-            case 5: {
-                glBindTexture(GL_TEXTURE_2D, texture5);
-                break;
-            }
-            case 6: {
-                glBindTexture(GL_TEXTURE_2D, texture6);
-                break;
-            }
-            case 7: {
-                glBindTexture(GL_TEXTURE_2D, texture7);
-                break;
-            }
-            case 8: {
-                glBindTexture(GL_TEXTURE_2D, texture8);
-                break;
-            }
-            case 9: {
-                glBindTexture(GL_TEXTURE_2D, texture9);
-                break;
-            }
-            default: glBindTexture(GL_TEXTURE_2D, texture0); // Fallback, should not occur
-            }
-            glBindVertexArray(coordinatesVao2y[7]);
-            glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+
+            drawDigit(6, first, texture0, texture1, texture2, texture3, texture4, texture5, texture6, texture7, texture8, texture9, coordinatesVao2y);
+            drawDigit(7, second, texture0, texture1, texture2, texture3, texture4, texture5, texture6, texture7, texture8, texture9, coordinatesVao2y);
         }
 
         //IME I PREZIME
