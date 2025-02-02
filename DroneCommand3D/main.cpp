@@ -305,8 +305,8 @@ int main(void)
     };
 
     unsigned int indices[] = {
-        0, 1, 3, // First triangle
-        1, 2, 3  // Second triangle
+        0, 3, 1, // First triangle
+        1, 3, 2  // Second triangle
     };
 
     unsigned int stride = (2 + 2) * sizeof(float);
@@ -377,13 +377,13 @@ int main(void)
     glBindVertexArray(0);
 
     unsigned int progressIndices1[] = {
-        0, 1, 2, 2, 3, 0, // Background
-        4, 5, 6, 6, 7, 4  // Filled portion
+        0, 2, 1, 2, 0, 3, // Background
+        4, 6, 5, 6, 4, 7  // Filled portion
     };
 
     unsigned int progressIndices2[] = {
-        0, 1, 2, 2, 3, 0, // Background
-        4, 5, 6, 6, 7, 4  // Filled portion
+        0, 2, 1, 2, 0, 3, // Background
+        4, 6, 5, 6, 4, 7  // Filled portion
     };
 
     //progress bar 1
@@ -445,16 +445,16 @@ int main(void)
         -0.67f, -0.76f,       1.0f, 1.0f
     };
     unsigned int batteryIndices1[] = {
-        0, 1, 3,
-        1, 2, 3
+        0, 3, 1,
+        1, 3, 2
     };
     unsigned int batteryIndices2[] = {
-        0, 1, 3,
-        1, 2, 3
+        0, 3, 1,
+        1, 3, 2
     };
     unsigned int batteryIndices3[] = {
-        0, 1, 3,
-        1, 2, 3
+        0, 3, 1,
+        1, 3, 2
     };
     unsigned int batteryVao1[3], batteryVbo1[3], batteryEbo1[3];
     glGenVertexArrays(3, batteryVao1);
@@ -523,16 +523,16 @@ int main(void)
         -0.17f, -0.76f,       1.0f, 1.0f
     };
     unsigned int batteryIndices21[] = {
-        0, 1, 3,
-        1, 2, 3
+        0, 3, 1,
+        1, 3, 2
     };
     unsigned int batteryIndices22[] = {
-        0, 1, 3,
-        1, 2, 3
+        0, 3, 1,
+        1, 3, 2
     };
     unsigned int batteryIndices23[] = {
-        0, 1, 3,
-        1, 2, 3
+        0, 3, 1,
+        1, 3, 2
     };
     unsigned int batteryVao2[3], batteryVbo2[3], batteryEbo2[3];
     glGenVertexArrays(3, batteryVao2);
@@ -2909,6 +2909,7 @@ int main(void)
         //inicijalizacija da se crta na 2/3 ekrana
         glViewport(wWidth - viewportWidth, wHeight - viewportHeight, viewportWidth, viewportHeight);
 
+        glDisable(GL_DEPTH_TEST);
         glScissor(wWidth - viewportWidth, wHeight - viewportHeight, viewportWidth, viewportHeight);
         glEnable(GL_SCISSOR_TEST);
 
