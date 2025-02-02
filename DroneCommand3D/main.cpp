@@ -288,8 +288,8 @@ int main(void)
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 
     GLFWwindow* window;
-    unsigned int wWidth = 1044;
-    unsigned int wHeight = 800;
+    unsigned int wWidth = 1392;
+    unsigned int wHeight = 1066;
     const char wTitle[] = "Drone Command 3D";
     window = glfwCreateWindow(wWidth, wHeight, wTitle, NULL, NULL);
 
@@ -417,16 +417,16 @@ int main(void)
         -0.67f, -0.76f,       1.0f, 1.0f
     };
     unsigned int batteryIndices1[] = {
-        0, 3, 1,
-        1, 3, 2
+        0, 1, 3,
+        1, 2, 3
     };
     unsigned int batteryIndices2[] = {
-        0, 3, 1,
-        1, 3, 2
+        0, 1, 3,
+        1, 2, 3
     };
     unsigned int batteryIndices3[] = {
-        0, 3, 1,
-        1, 3, 2
+        0, 1, 3,
+        1, 2, 3
     };
     unsigned int batteryVao1[3], batteryVbo1[3], batteryEbo1[3];
     glGenVertexArrays(3, batteryVao1);
@@ -486,16 +486,16 @@ int main(void)
         -0.17f, -0.76f,       1.0f, 1.0f
     };
     unsigned int batteryIndices21[] = {
-        0, 3, 1,
-        1, 3, 2
+        0, 1, 3,
+        1, 2, 3
     };
     unsigned int batteryIndices22[] = {
-        0, 3, 1,
-        1, 3, 2
+        0, 1, 3,
+        1, 2, 3
     };
     unsigned int batteryIndices23[] = {
-        0, 3, 1,
-        1, 3, 2
+        0, 1, 3,
+        1, 2, 3
     };
     unsigned int batteryVao2[3], batteryVbo2[3], batteryEbo2[3];
     glGenVertexArrays(3, batteryVao2);
@@ -2438,10 +2438,6 @@ int main(void)
         glUseProgram(unifiedShader);
         glBindVertexArray(progressVAO2);
         glDrawElements(GL_TRIANGLES, 12, GL_UNSIGNED_INT, 0);
-
-        glEnable(GL_BLEND);
-        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-        glDisable(GL_DEPTH_TEST);
 
 
         int hundreds, tens, ones;
