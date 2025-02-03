@@ -1523,6 +1523,26 @@ int main(void)
                     drone2.active = false;
                 }
             }
+            if (glfwGetKey(window, GLFW_KEY_C) == GLFW_PRESS) {
+                if (glfwGetKey(window, GLFW_KEY_1) == GLFW_PRESS) {
+                    drone1.cameraOn = true;
+                }
+            }
+            if (glfwGetKey(window, GLFW_KEY_C) == GLFW_PRESS) {
+                if (glfwGetKey(window, GLFW_KEY_2) == GLFW_PRESS) {
+                    drone2.cameraOn = true;
+                }
+            }
+            if (glfwGetKey(window, GLFW_KEY_X) == GLFW_PRESS) {
+                if (glfwGetKey(window, GLFW_KEY_1) == GLFW_PRESS) {
+                    drone1.cameraOn = false;
+                }
+            }
+            if (glfwGetKey(window, GLFW_KEY_X) == GLFW_PRESS) {
+                if (glfwGetKey(window, GLFW_KEY_2) == GLFW_PRESS) {
+                    drone2.cameraOn = false;
+                }
+            }
             if (drone1.active && !drone1.destroyed) {
                 if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS) {
                     drone1.y += 0.005;
@@ -1564,6 +1584,13 @@ int main(void)
             }
             if (drone2.active && drone2.batteryLevel > 0) {
                 drone2.batteryLevel -= 0.1f;
+            }
+
+            if (drone1.cameraOn) {
+                drone1.batteryLevel -= 0.02;
+            }
+            if (drone2.cameraOn) {
+                drone2.batteryLevel -= 0.02;
             }
 
             if (drone1.destroyed) {
