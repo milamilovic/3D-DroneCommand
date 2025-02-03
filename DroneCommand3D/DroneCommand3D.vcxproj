@@ -151,6 +151,10 @@
     <None Include="res\majevicahighres.mtl" />
     <None Include="res\majevicamala.mtl" />
     <None Include="res\majevicamapa.mtl" />
+    <None Include="static1.frag" />
+    <None Include="static1.vert" />
+    <None Include="static2.frag" />
+    <None Include="static2.vert" />
     <None Include="texture.frag" />
     <None Include="texture.vert" />
   </ItemGroup>

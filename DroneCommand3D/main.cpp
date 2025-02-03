@@ -39,6 +39,12 @@ unsigned loadAndConfigureTexture(const char* filePath, unsigned shaderProgram, c
     glUseProgram(shaderProgram);
     unsigned uTexLoc = glGetUniformLocation(shaderProgram, uniformName);
     glUniform1i(uTexLoc, textureUnit);
+
+    if (filePath == "res/static4.jpg" || filePath == "res/static5.jpg") {
+        unsigned uTime = glGetUniformLocation(shaderProgram, "uTime");
+        glUniform1f(uTime, float(glfwGetTime()));
+    }
+
     glUseProgram(0);
 
     return texture;
@@ -350,6 +356,8 @@ int main(void)
     unsigned int unifiedShader = createShader("basic.vert", "basic.frag");
     unsigned int textureShader = createShader("texture.vert", "texture.frag");
     unsigned int mapShader = createShader("map.vert", "map.frag");
+    unsigned int staticShader1 = createShader("static1.vert", "static1.frag");
+    unsigned int staticShader2 = createShader("static2.vert", "static2.frag");
 
 
     glBindBuffer(GL_ARRAY_BUFFER, 0);
@@ -399,6 +407,22 @@ int main(void)
     };
     unsigned int VAO, VBO, EBO;
     createVAO(VAO, VBO, EBO, map, sizeof(map), indices, sizeof(indices), 2, stride, 2 * sizeof(float));
+
+
+    //whole screen (for static)
+    float staticVertexes[] = {
+        // X    Y      S    T
+        1.0f,  1.0f,  1.0f, 1.0f, // Top-right
+        1.0f, -1.0f,  1.0f, 0.0f, // Bottom-right
+       -1.0f, -1.0f,  0.0f, 0.0f, // Bottom-left
+       -1.0f,  1.0f,  0.0f, 1.0f  // Top-left
+    };
+    unsigned int staticIndices[] = {
+        0, 3, 1, // First triangle
+        1, 3, 2  // Second triangle
+    };
+    unsigned int staticVAO, staticVBO, staticEBO;
+    createVAO(staticVAO, staticVBO, staticEBO, staticVertexes, sizeof(staticVertexes), staticIndices, sizeof(staticIndices), 2, stride, 2 * sizeof(float));
 
 
     //no fly zone
@@ -1427,6 +1451,11 @@ int main(void)
     unsigned textureE = loadAndConfigureTexture("res/e.png", textureShader, "uTex", 0);
     unsigned textureT = loadAndConfigureTexture("res/t.png", textureShader, "uTex", 0);
     unsigned textureR = loadAndConfigureTexture("res/r.png", textureShader, "uTex", 0);
+    unsigned static1 = loadAndConfigureTexture("res/static1.jpg", textureShader, "uTex", 0);
+    unsigned static2 = loadAndConfigureTexture("res/static2.jpg", textureShader, "uTex", 0);
+    unsigned static3 = loadAndConfigureTexture("res/static3.jpg", textureShader, "uTex", 0);
+    unsigned static4 = loadAndConfigureTexture("res/static4.jpg", textureShader, "uTex", 0);
+    unsigned static5 = loadAndConfigureTexture("res/static5.jpg", textureShader, "uTex", 0);
     unsigned mapTexture = loadAndConfigureTexture("res/majevica.jpg", mapShader, "uTex", 0);
 
 
@@ -1695,47 +1724,103 @@ int main(void)
 
 
         //first drone camera view
-        glDisable(GL_DEPTH_TEST);
-        glScissor(0, 0, viewportWidth, viewportHeight);
-        glEnable(GL_SCISSOR_TEST);
-        glClearColor(0.529f, 0.808f, 0.922f, 1.0f); // blue
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-        glEnable(GL_DEPTH_TEST);
-        glDisable(GL_SCISSOR_TEST);
-        glViewport(0, 0, wWidth / 2, wHeight / 2);  //bottom left quarter
-        glm::mat4 drone1View = glm::lookAt(
-            glm::vec3(30.0f, 8.0f, 24.0f), // Camera position (below the drone)
-            glm::vec3(30.0f, 8.5f, 25.0f), // Look to front
-            glm::vec3(0.0f, 1.0f, 0.0f)
-        );
-        shaderProgram.setMat4("uV", drone1View);
-        shaderProgram.setMat4("uP", projection);
+        if (drone1.cameraOn) {
+            glDisable(GL_DEPTH_TEST);
+            glScissor(0, 0, viewportWidth, viewportHeight);
+            glEnable(GL_SCISSOR_TEST);
+            glClearColor(0.529f, 0.808f, 0.922f, 1.0f); // blue
+            glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+            glEnable(GL_DEPTH_TEST);
+            glDisable(GL_SCISSOR_TEST);
+            glViewport(0, 0, wWidth / 2, wHeight / 2);  //bottom left quarter
+            glm::mat4 drone1View = glm::lookAt(
+                glm::vec3(30.0f, 8.0f, 24.0f), // Camera position (below the drone)
+                glm::vec3(30.0f, 8.5f, 25.0f), // Look to front
+                glm::vec3(0.0f, 1.0f, 0.0f)
+            );
+            shaderProgram.setMat4("uV", drone1View);
+            shaderProgram.setMat4("uP", projection);
 
-        shaderProgram.setMat4("uM", majevicaModelMatrix);
-        majevicaModel.Draw(shaderProgram);
+            shaderProgram.setMat4("uM", majevicaModelMatrix);
+            majevicaModel.Draw(shaderProgram);
+        }
+        else {
+            glDisable(GL_DEPTH_TEST);
+            glScissor(0, 0, viewportWidth, viewportHeight);
+            glEnable(GL_SCISSOR_TEST);
+            glClearColor(0.0, 0.f, 0.f, 1.0f); // black for background
+            glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+            glEnable(GL_DEPTH_TEST);
+            glDisable(GL_SCISSOR_TEST);
+            glViewport(0, 0, wWidth / 2, wHeight / 2);
 
+            glm::mat4 orthoProjection = glm::ortho(0.0f, static_cast<float>(viewportWidth),
+                0.0f, static_cast<float>(viewportHeight));
+            shaderProgram.setMat4("projection", orthoProjection);
+            shaderProgram.setMat4("model", glm::mat4(1.0f));
+
+            //static texture
+            glUseProgram(staticShader1);
+            int uTime = glGetUniformLocation(staticShader1, "uTime");
+            glUniform1f(uTime, static_cast<float>(glfwGetTime()));
+            glActiveTexture(GL_TEXTURE0);
+            glBindTexture(GL_TEXTURE_2D, static5);
+            glBindVertexArray(staticVAO);
+            glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+            glBindVertexArray(0);
+        }
 
 
         //second drone camera view
-        glDisable(GL_DEPTH_TEST);
-        glScissor(wWidth / 2, 0, viewportWidth, viewportHeight);
-        glEnable(GL_SCISSOR_TEST);
-        glClearColor(0.529f, 0.808f, 0.922f, 1.0f); // blue
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-        glEnable(GL_DEPTH_TEST);
-        glDisable(GL_SCISSOR_TEST);
-        glViewport(wWidth / 2, 0, wWidth / 2, wHeight / 2);
-        glm::mat4 drone2View = glm::lookAt(
-            glm::vec3(-18.0f, 8.0f, 24.0f), // Camera position (below the drone)
-            glm::vec3(-18.0f, 8.5f, 25.0f), // Look to front
-            glm::vec3(0.0f, 1.0f, 0.0f)
-        );
-        shaderProgram.setMat4("uV", drone2View);
-        shaderProgram.setMat4("uP", projection);
+        if (drone2.cameraOn) {
+            if (!drone1.cameraOn) {
+                shaderProgram.setMat4("projection", projection);
+                shaderProgram.use();
+            }
+            glDisable(GL_DEPTH_TEST);
+            glScissor(wWidth / 2, 0, viewportWidth, viewportHeight);
+            glEnable(GL_SCISSOR_TEST);
+            glClearColor(0.529f, 0.808f, 0.922f, 1.0f); // blue
+            glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+            glEnable(GL_DEPTH_TEST);
+            glDisable(GL_SCISSOR_TEST);
+            glViewport(wWidth / 2, 0, wWidth / 2, wHeight / 2);
+            glm::mat4 drone2View = glm::lookAt(
+                glm::vec3(-18.0f, 8.0f, 24.0f), // Camera position (below the drone)
+                glm::vec3(-18.0f, 8.5f, 25.0f), // Look to front
+                glm::vec3(0.0f, 1.0f, 0.0f)
+            );
+            shaderProgram.setMat4("uV", drone2View);
+            shaderProgram.setMat4("uP", projection);
 
-        shaderProgram.setMat4("uM", majevicaModelMatrix);
-        majevicaModel.Draw(shaderProgram);
+            shaderProgram.setMat4("uM", majevicaModelMatrix);
+            majevicaModel.Draw(shaderProgram);
+        }
+        else {
+            glDisable(GL_DEPTH_TEST);
+            glScissor(wWidth / 2, 0, viewportWidth, viewportHeight);
+            glEnable(GL_SCISSOR_TEST);
+            glClearColor(0.0, 0.f, 0.f, 1.0f); // black for background
+            glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+            glEnable(GL_DEPTH_TEST);
+            glDisable(GL_SCISSOR_TEST);
+            glViewport(wWidth / 2, 0, wWidth / 2, wHeight / 2);
 
+            glm::mat4 orthoProjection = glm::ortho(0.0f, static_cast<float>(viewportWidth),
+                0.0f, static_cast<float>(viewportHeight));
+            shaderProgram.setMat4("projection", orthoProjection);
+            shaderProgram.setMat4("model", glm::mat4(1.0f));
+
+            //static texture
+            glUseProgram(staticShader2);
+            int uTime = glGetUniformLocation(staticShader2, "uTime");
+            glUniform1f(uTime, static_cast<float>(glfwGetTime()));
+            glActiveTexture(GL_TEXTURE0);
+            glBindTexture(GL_TEXTURE_2D, static4);
+            glBindVertexArray(staticVAO);
+            glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+            glBindVertexArray(0);
+        }
 
 
         // ++++++++++++++++++++++++++++++++++++++++++++++++++++++            CRTANJE 2D DELA            +++++++++++++++++++++++++++++++++++++++++++++++++
@@ -2207,6 +2292,8 @@ int main(void)
     glDeleteProgram(unifiedShader);
     glDeleteProgram(textureShader);
     glDeleteProgram(mapShader);
+    glDeleteProgram(staticShader1);
+    glDeleteProgram(staticShader2);
 
     glDeleteTextures(1, &mapTexture);
     glDeleteBuffers(1, &VBO);
