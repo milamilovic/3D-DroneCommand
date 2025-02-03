@@ -113,9 +113,10 @@ struct Drone {
     bool active;
     bool destroyed;
     float height;
+    bool cameraOn;
 };
-Drone drone1 = { -0.5f, -0.5f, 0.05f, 100.0f, false, false, 0 };
-Drone drone2 = { 0.5f, -0.5f, 0.05f, 100.0f, false, false, 0 };
+Drone drone1 = { -0.5f, -0.5f, 0.05f, 100.0f, false, false, 0, false };
+Drone drone2 = { 0.5f, -0.5f, 0.05f, 100.0f, false, false, 0, false };
 
 void updateDroneVertices(const Drone& drone, float vertices[], float aspectRatio) {
     const float centerX = drone.x;
@@ -1433,7 +1434,7 @@ int main(void)
     // ++++++++++++++++++++++++++++++++++++++++++++++++++++++            UNIFORME            +++++++++++++++++++++++++++++++++++++++++++++++++
 
     glm::mat4 model = glm::mat4(1.0f); 
-    glm::mat4 view = glm::lookAt(glm::vec3(0.0f, 50.0f, 0.2f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.01f, 0.0f));
+    glm::mat4 view = glm::lookAt(glm::vec3(0.0f, 50.0f, 0.2f), glm::vec3(0.0f, 1.0f, 0.0f), glm::vec3(0.0f, 0.01f, 0.0f));
     glm::mat4 projection = glm::perspective(glm::radians(100.0f), (float)wWidth / (float)wHeight, 0.1f, 100.0f);
 
     shaderProgram.use();
@@ -1648,16 +1649,24 @@ int main(void)
 
         // ++++++++++++++++++++++++++++++++++++++++++++++++++++++            CRTANJE 3D DELA            +++++++++++++++++++++++++++++++++++++++++++++++++
 
-        glViewport(0, wHeight - viewportHeight, viewportWidth, viewportHeight);  // 1/4 of the screen
+        glViewport(0, wHeight - viewportHeight, viewportWidth, viewportHeight);  // top 1/4 of the screen
+
+        glDisable(GL_DEPTH_TEST);
+        glScissor(0, wHeight - viewportHeight, viewportWidth, viewportHeight);
+        glEnable(GL_SCISSOR_TEST);
+
+        glClearColor(0.0f, 0.0f, 0.0f, 1.0f); // black
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
         glEnable(GL_DEPTH_TEST);
         glDisable(GL_SCISSOR_TEST);  // Ensure scissor test is off for 3D
 
         glClearColor(0.529f, 0.808f, 0.922f, 1.0f); // Light blue for 3D
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+        //glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
         shaderProgram.use();
         shaderProgram.setMat4("uM", model);
+        shaderProgram.setMat4("uV", view);
         shaderProgram.setMat4("uP", projection);
 
         // render the majevica model
@@ -1682,6 +1691,51 @@ int main(void)
         shaderProgram.setMat4("model", droneModel2);
         shaderProgram.setMat4("uM", droneModel2);
         droneModel.Draw(shaderProgram);
+
+
+
+        //first drone camera view
+        glDisable(GL_DEPTH_TEST);
+        glScissor(0, 0, viewportWidth, viewportHeight);
+        glEnable(GL_SCISSOR_TEST);
+        glClearColor(0.529f, 0.808f, 0.922f, 1.0f); // blue
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+        glEnable(GL_DEPTH_TEST);
+        glDisable(GL_SCISSOR_TEST);
+        glViewport(0, 0, wWidth / 2, wHeight / 2);  //bottom left quarter
+        glm::mat4 drone1View = glm::lookAt(
+            glm::vec3(30.0f, 8.0f, 24.0f), // Camera position (below the drone)
+            glm::vec3(30.0f, 8.5f, 25.0f), // Look to front
+            glm::vec3(0.0f, 1.0f, 0.0f)
+        );
+        shaderProgram.setMat4("uV", drone1View);
+        shaderProgram.setMat4("uP", projection);
+
+        shaderProgram.setMat4("uM", majevicaModelMatrix);
+        majevicaModel.Draw(shaderProgram);
+
+
+
+        //second drone camera view
+        glDisable(GL_DEPTH_TEST);
+        glScissor(wWidth / 2, 0, viewportWidth, viewportHeight);
+        glEnable(GL_SCISSOR_TEST);
+        glClearColor(0.529f, 0.808f, 0.922f, 1.0f); // blue
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+        glEnable(GL_DEPTH_TEST);
+        glDisable(GL_SCISSOR_TEST);
+        glViewport(wWidth / 2, 0, wWidth / 2, wHeight / 2);
+        glm::mat4 drone2View = glm::lookAt(
+            glm::vec3(-18.0f, 8.0f, 24.0f), // Camera position (below the drone)
+            glm::vec3(-18.0f, 8.5f, 25.0f), // Look to front
+            glm::vec3(0.0f, 1.0f, 0.0f)
+        );
+        shaderProgram.setMat4("uV", drone2View);
+        shaderProgram.setMat4("uP", projection);
+
+        shaderProgram.setMat4("uM", majevicaModelMatrix);
+        majevicaModel.Draw(shaderProgram);
+
 
 
         // ++++++++++++++++++++++++++++++++++++++++++++++++++++++            CRTANJE 2D DELA            +++++++++++++++++++++++++++++++++++++++++++++++++
