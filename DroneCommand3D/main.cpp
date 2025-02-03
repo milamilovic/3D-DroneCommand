@@ -1724,7 +1724,7 @@ int main(void)
 
 
         //first drone camera view
-        if (drone1.cameraOn) {
+        if (drone1.cameraOn && !drone1.destroyed) {
             glDisable(GL_DEPTH_TEST);
             glScissor(0, 0, viewportWidth, viewportHeight);
             glEnable(GL_SCISSOR_TEST);
@@ -1772,7 +1772,7 @@ int main(void)
 
 
         //second drone camera view
-        if (drone2.cameraOn) {
+        if (drone2.cameraOn && !drone2.destroyed) {
             if (!drone1.cameraOn) {
                 shaderProgram.setMat4("projection", projection);
                 shaderProgram.use();
