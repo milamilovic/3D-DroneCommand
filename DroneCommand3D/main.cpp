@@ -39,6 +39,12 @@ unsigned loadAndConfigureTexture(const char* filePath, unsigned shaderProgram, c
     glUseProgram(shaderProgram);
     unsigned uTexLoc = glGetUniformLocation(shaderProgram, uniformName);
     glUniform1i(uTexLoc, textureUnit);
+
+    if (filePath == "res/static4.jpg" || filePath == "res/static5.jpg") {
+        unsigned uTime = glGetUniformLocation(shaderProgram, "uTime");
+        glUniform1f(uTime, float(glfwGetTime()));
+    }
+
     glUseProgram(0);
 
     return texture;
@@ -113,14 +119,23 @@ struct Drone {
     bool active;
     bool destroyed;
     float height;
+    bool cameraOn;
+    float rotation;
 };
-Drone drone1 = { -0.5f, -0.5f, 0.05f, 100.0f, false, false, 0 };
-Drone drone2 = { 0.5f, -0.5f, 0.05f, 100.0f, false, false, 0 };
+Drone drone1 = { -0.5f, -0.5f, 0.05f, 100.0f, false, false, 5.0f, false, 0.0f };
+Drone drone2 = { 0.5f, -0.5f, 0.05f, 100.0f, false, false, 5.0f, false, 0.0f };
+glm::vec3 drone1Position = glm::vec3(-18.0f, 5.0f, 19.0f);
+glm::vec3 drone2Position = glm::vec3(15.0f, 5.0f, 19.0f);
+glm::vec3 drone1CameraPosition = glm::vec3(-18.0f, 9.0f, 19.0f);
+glm::vec3 drone2CameraPosition = glm::vec3(15.0f, 9.0f, 19.0f);
+float moveSpeed = 0.16f;
+float cameraMoveSpeed = 0.26f;
+float rotationSpeed = 2.0f;
 
 void updateDroneVertices(const Drone& drone, float vertices[], float aspectRatio) {
     const float centerX = drone.x;
     const float centerY = drone.y;
-    const float radius = drone.radius + 0.0005 * drone.height;
+    const float radius = drone.radius - 0.01 * (5.0 - drone.height);
     const int numPoints = 30;
 
     vertices[0] = drone.x;      // X
@@ -179,6 +194,15 @@ struct NoFlyZone {
 NoFlyZone noFlyZone = { 0.05f, -0.07f, 0.20f, false, false };
 
 bool areClashing(float x1, float y1, float r1, float x2, float y2, float r2) {
+    float dx = (x2 - x1) * 4 / 3;
+    float dy = y2 - y1;
+    float distance = std::sqrt(dx * dx + dy * dy);
+    return distance <= (r1 + r2);
+}
+
+bool areDronesClashing(float x1, float y1, float r1, float x2, float y2, float r2) {
+    //if the height difference is too big they are not clashing
+    if (abs(drone1.height - drone2.height) > 2) return false;
     float dx = (x2 - x1) * 4 / 3;
     float dy = y2 - y1;
     float distance = std::sqrt(dx * dx + dy * dy);
@@ -349,6 +373,8 @@ int main(void)
     unsigned int unifiedShader = createShader("basic.vert", "basic.frag");
     unsigned int textureShader = createShader("texture.vert", "texture.frag");
     unsigned int mapShader = createShader("map.vert", "map.frag");
+    unsigned int staticShader1 = createShader("static1.vert", "static1.frag");
+    unsigned int staticShader2 = createShader("static2.vert", "static2.frag");
 
 
     glBindBuffer(GL_ARRAY_BUFFER, 0);
@@ -398,6 +424,22 @@ int main(void)
     };
     unsigned int VAO, VBO, EBO;
     createVAO(VAO, VBO, EBO, map, sizeof(map), indices, sizeof(indices), 2, stride, 2 * sizeof(float));
+
+
+    //whole screen (for static)
+    float staticVertexes[] = {
+        // X    Y      S    T
+        1.0f,  1.0f,  1.0f, 1.0f, // Top-right
+        1.0f, -1.0f,  1.0f, 0.0f, // Bottom-right
+       -1.0f, -1.0f,  0.0f, 0.0f, // Bottom-left
+       -1.0f,  1.0f,  0.0f, 1.0f  // Top-left
+    };
+    unsigned int staticIndices[] = {
+        0, 3, 1, // First triangle
+        1, 3, 2  // Second triangle
+    };
+    unsigned int staticVAO, staticVBO, staticEBO;
+    createVAO(staticVAO, staticVBO, staticEBO, staticVertexes, sizeof(staticVertexes), staticIndices, sizeof(staticIndices), 2, stride, 2 * sizeof(float));
 
 
     //no fly zone
@@ -1426,6 +1468,11 @@ int main(void)
     unsigned textureE = loadAndConfigureTexture("res/e.png", textureShader, "uTex", 0);
     unsigned textureT = loadAndConfigureTexture("res/t.png", textureShader, "uTex", 0);
     unsigned textureR = loadAndConfigureTexture("res/r.png", textureShader, "uTex", 0);
+    unsigned static1 = loadAndConfigureTexture("res/static1.jpg", textureShader, "uTex", 0);
+    unsigned static2 = loadAndConfigureTexture("res/static2.jpg", textureShader, "uTex", 0);
+    unsigned static3 = loadAndConfigureTexture("res/static3.jpg", textureShader, "uTex", 0);
+    unsigned static4 = loadAndConfigureTexture("res/static4.jpg", textureShader, "uTex", 0);
+    unsigned static5 = loadAndConfigureTexture("res/static5.jpg", textureShader, "uTex", 0);
     unsigned mapTexture = loadAndConfigureTexture("res/majevica.jpg", mapShader, "uTex", 0);
 
 
@@ -1433,7 +1480,7 @@ int main(void)
     // ++++++++++++++++++++++++++++++++++++++++++++++++++++++            UNIFORME            +++++++++++++++++++++++++++++++++++++++++++++++++
 
     glm::mat4 model = glm::mat4(1.0f); 
-    glm::mat4 view = glm::lookAt(glm::vec3(0.0f, 50.0f, 0.2f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.01f, 0.0f));
+    glm::mat4 view = glm::lookAt(glm::vec3(0.0f, 50.0f, 0.2f), glm::vec3(0.0f, 1.0f, 0.0f), glm::vec3(0.0f, 0.01f, 0.0f));
     glm::mat4 projection = glm::perspective(glm::radians(100.0f), (float)wWidth / (float)wHeight, 0.1f, 100.0f);
 
     shaderProgram.use();
@@ -1493,40 +1540,117 @@ int main(void)
                     drone2.active = false;
                 }
             }
+            if (glfwGetKey(window, GLFW_KEY_C) == GLFW_PRESS) {
+                if (glfwGetKey(window, GLFW_KEY_1) == GLFW_PRESS) {
+                    drone1.cameraOn = true;
+                }
+            }
+            if (glfwGetKey(window, GLFW_KEY_C) == GLFW_PRESS) {
+                if (glfwGetKey(window, GLFW_KEY_2) == GLFW_PRESS) {
+                    drone2.cameraOn = true;
+                }
+            }
+            if (glfwGetKey(window, GLFW_KEY_X) == GLFW_PRESS) {
+                if (glfwGetKey(window, GLFW_KEY_1) == GLFW_PRESS) {
+                    drone1.cameraOn = false;
+                }
+            }
+            if (glfwGetKey(window, GLFW_KEY_X) == GLFW_PRESS) {
+                if (glfwGetKey(window, GLFW_KEY_2) == GLFW_PRESS) {
+                    drone2.cameraOn = false;
+                }
+            }
             if (drone1.active && !drone1.destroyed) {
-                if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS) {
-                    drone1.y += 0.005;
-                    if (drone1.y > 1) drone1.destroyed = true;
+
+                if ((glfwGetKey(window, GLFW_KEY_LEFT_CONTROL) == GLFW_PRESS ||
+                    glfwGetKey(window, GLFW_KEY_RIGHT_CONTROL) == GLFW_PRESS)) {
+                    if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS) {
+                        drone1.height += 0.1f;
+                        drone1Position.y += 0.1f;
+                    }
+                    else if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS) {
+                        drone1.height -= 0.1f;
+                        drone1Position.y -= 0.1f;
+                    }
+                    if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS) {
+                        drone1.rotation += rotationSpeed;
+                    }
+                    if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS) {
+                        drone1.rotation -= rotationSpeed;
+                    }
                 }
-                if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS) {
-                    drone1.y -= 0.005;
-                    if (drone1.y < -0.65) drone1.destroyed = true;
-                }
-                if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS) {
-                    drone1.x -= 0.005;
-                    if (drone1.x < -1) drone1.destroyed = true;
-                }
-                if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS) {
-                    drone1.x += 0.005;
-                    if (drone1.x > 1) drone1.destroyed = true;
+                else {
+                    if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS) {
+                        drone1.y += 0.005;
+                        drone1Position.z -= moveSpeed;
+                        drone1CameraPosition.z -= cameraMoveSpeed;
+                        if (drone1.y > 1) drone1.destroyed = true;
+                    }
+                    if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS) {
+                        drone1.y -= 0.005;
+                        drone1Position.z += moveSpeed;
+                        drone1CameraPosition.z += cameraMoveSpeed;
+                        if (drone1.y < -0.65) drone1.destroyed = true;
+                    }
+                    if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS) {
+                        drone1.x -= 0.005;
+                        drone1Position.x -= moveSpeed;
+                        drone1CameraPosition.x -= cameraMoveSpeed;
+                        if (drone1.x < -1) drone1.destroyed = true;
+                    }
+                    if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS) {
+                        drone1.x += 0.005;
+                        drone1Position.x += moveSpeed;
+                        drone1CameraPosition.x += cameraMoveSpeed;
+                        if (drone1.x > 1) drone1.destroyed = true;
+                    }
                 }
             }
             if (drone2.active && !drone2.destroyed) {
-                if (glfwGetKey(window, GLFW_KEY_UP) == GLFW_PRESS) {
-                    drone2.y += 0.005;
-                    if (drone2.y > 1) drone2.destroyed = true;
+                //change height
+                if ((glfwGetKey(window, GLFW_KEY_LEFT_CONTROL) == GLFW_PRESS ||
+                    glfwGetKey(window, GLFW_KEY_RIGHT_CONTROL) == GLFW_PRESS)) {
+                    if (glfwGetKey(window, GLFW_KEY_LEFT) == GLFW_PRESS) {
+                        drone2.rotation += rotationSpeed;
+                    }
+                    if (glfwGetKey(window, GLFW_KEY_RIGHT) == GLFW_PRESS) {
+                        drone2.rotation -= rotationSpeed;
+                    }
+                    if (glfwGetKey(window, GLFW_KEY_UP) == GLFW_PRESS) {
+                        drone2.height += 0.1;
+                        drone2Position.y += 0.1;
+                    }
+                    if (glfwGetKey(window, GLFW_KEY_DOWN) == GLFW_PRESS) {
+                        drone2.height -= 0.1;
+                        drone1Position.y -= 0.1;
+                    }
                 }
-                if (glfwGetKey(window, GLFW_KEY_DOWN) == GLFW_PRESS) {
-                    drone2.y -= 0.005;
-                    if (drone2.y < -0.65) drone2.destroyed = true;
-                }
-                if (glfwGetKey(window, GLFW_KEY_LEFT) == GLFW_PRESS) {
-                    drone2.x -= 0.005;
-                    if (drone2.x < -1) drone2.destroyed = true;
-                }
-                if (glfwGetKey(window, GLFW_KEY_RIGHT) == GLFW_PRESS) {
-                    drone2.x += 0.005;
-                    if (drone2.x > 1) drone2.destroyed = true;
+                else {
+                    //left right up down
+                    if (glfwGetKey(window, GLFW_KEY_UP) == GLFW_PRESS) {
+                        drone2.y += 0.005;
+                        drone2Position.z -= moveSpeed;
+                        drone2CameraPosition.z -= cameraMoveSpeed;
+                        if (drone2.y > 1) drone2.destroyed = true;
+                    }
+                    if (glfwGetKey(window, GLFW_KEY_DOWN) == GLFW_PRESS) {
+                        drone2.y -= 0.005;
+                        drone2Position.z += moveSpeed;
+                        drone2CameraPosition.z += cameraMoveSpeed;
+                        if (drone2.y < -0.65) drone2.destroyed = true;
+                    }
+                    if (glfwGetKey(window, GLFW_KEY_LEFT) == GLFW_PRESS) {
+                        drone2.x -= 0.005;
+                        drone2Position.x -= moveSpeed;
+                        drone2CameraPosition.x -= cameraMoveSpeed;
+                        if (drone2.x < -1) drone2.destroyed = true;
+                    }
+                    if (glfwGetKey(window, GLFW_KEY_RIGHT) == GLFW_PRESS) {
+                        drone2.x += 0.005;
+                        drone2Position.x += moveSpeed;
+                        drone2CameraPosition.x += cameraMoveSpeed;
+                        if (drone2.x > 1) drone2.destroyed = true;
+                    }
                 }
             }
             if (drone1.active && drone1.batteryLevel > 0) {
@@ -1534,6 +1658,13 @@ int main(void)
             }
             if (drone2.active && drone2.batteryLevel > 0) {
                 drone2.batteryLevel -= 0.1f;
+            }
+
+            if (drone1.cameraOn) {
+                drone1.batteryLevel -= 0.02;
+            }
+            if (drone2.cameraOn) {
+                drone2.batteryLevel -= 0.02;
             }
 
             if (drone1.destroyed) {
@@ -1551,7 +1682,7 @@ int main(void)
             }
 
             //2 drones
-            if (areClashing(drone1.x, drone1.y, drone1.radius, drone2.x, drone2.y, drone2.radius)) {
+            if (areDronesClashing(drone1.x, drone1.y, drone1.radius, drone2.x, drone2.y, drone2.radius)) {
                 drone1.destroyed = true;
                 drone2.destroyed = true;
             }
@@ -1648,16 +1779,24 @@ int main(void)
 
         // ++++++++++++++++++++++++++++++++++++++++++++++++++++++            CRTANJE 3D DELA            +++++++++++++++++++++++++++++++++++++++++++++++++
 
-        glViewport(0, wHeight - viewportHeight, viewportWidth, viewportHeight);  // 1/4 of the screen
+        glViewport(0, wHeight - viewportHeight, viewportWidth, viewportHeight);  // top 1/4 of the screen
+
+        glDisable(GL_DEPTH_TEST);
+        glScissor(0, wHeight - viewportHeight, viewportWidth, viewportHeight);
+        glEnable(GL_SCISSOR_TEST);
+
+        glClearColor(0.0f, 0.0f, 0.0f, 1.0f); // black
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
         glEnable(GL_DEPTH_TEST);
         glDisable(GL_SCISSOR_TEST);  // Ensure scissor test is off for 3D
 
         glClearColor(0.529f, 0.808f, 0.922f, 1.0f); // Light blue for 3D
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+        //glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
         shaderProgram.use();
         shaderProgram.setMat4("uM", model);
+        shaderProgram.setMat4("uV", view);
         shaderProgram.setMat4("uP", projection);
 
         // render the majevica model
@@ -1667,21 +1806,139 @@ int main(void)
         majevicaModel.Draw(shaderProgram);
 
         // render the first drone model
-        glm::mat4 droneModel1 = glm::mat4(1.0f);
-        droneModel1 = glm::scale(droneModel1, glm::vec3(0.8f, 0.8f, 0.8f));
-        droneModel1 = glm::translate(droneModel1, glm::vec3(15.0f, 9.0f, 19.0f));
-        shaderProgram.setMat4("model", droneModel1);
-        shaderProgram.setMat4("uM", droneModel1);
-        //shaderProgram.setVec3("objectColor", glm::vec3(0.0f, 1.0f, 0.0f));
-        droneModel.Draw(shaderProgram);
+        if (!drone1.destroyed) {
+            glm::mat4 droneModel1 = glm::mat4(1.0f);
+            //droneModel1 = glm::rotate(droneModel1, glm::radians(drone1.rotation), drone1Position);
+            droneModel1 = glm::rotate(droneModel1, glm::radians(drone1.rotation), glm::vec3(drone1Position.x, drone1Position.y-0.0, drone1Position.z));
+            droneModel1 = glm::scale(droneModel1, glm::vec3(0.8f, 0.8f, 0.8f));
+            droneModel1 = glm::translate(droneModel1, drone1Position);
+            shaderProgram.setMat4("model", droneModel1);
+            shaderProgram.setMat4("uM", droneModel1);
+            //shaderProgram.setVec3("objectColor", glm::vec3(0.0f, 1.0f, 0.0f));
+            droneModel.Draw(shaderProgram);
+        }
 
         // render the second drone model
-        glm::mat4 droneModel2 = glm::mat4(1.0f);
-        droneModel2 = glm::scale(droneModel2, glm::vec3(0.8f, 0.8f, 0.8f));
-        droneModel2 = glm::translate(droneModel2, glm::vec3(-18.0f, 9.0f, 19.0f));
-        shaderProgram.setMat4("model", droneModel2);
-        shaderProgram.setMat4("uM", droneModel2);
-        droneModel.Draw(shaderProgram);
+        if (!drone2.destroyed) {
+            glm::mat4 droneModel2 = glm::mat4(1.0f);
+            // ovo postavlja dron na world center i tada dobro rotira ali se ne pomera :)
+            //droneModel2 = glm::translate(droneModel2, glm::vec3(0, 0, 0));
+            //droneModel2 = glm::rotate(droneModel2, glm::radians(drone2.rotation), glm::vec3(0.0f, 1.0f, 0.0f));
+            droneModel2 = glm::rotate(droneModel2, glm::radians(drone2.rotation), drone2Position);
+            droneModel2 = glm::translate(droneModel2, drone2Position);
+            droneModel2 = glm::scale(droneModel2, glm::vec3(0.8f, 0.8f, 0.8f));
+            shaderProgram.setMat4("model", droneModel2);
+            shaderProgram.setMat4("uM", droneModel2);
+            droneModel.Draw(shaderProgram);
+        }
+
+
+
+        //first drone camera view
+        if (drone1.cameraOn && !drone1.destroyed) {
+            glDisable(GL_DEPTH_TEST);
+            glScissor(0, 0, viewportWidth, viewportHeight);
+            glEnable(GL_SCISSOR_TEST);
+            glClearColor(0.529f, 0.808f, 0.922f, 1.0f); // blue
+            glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+            glEnable(GL_DEPTH_TEST);
+            glDisable(GL_SCISSOR_TEST);
+            glViewport(0, 0, wWidth / 2, wHeight / 2);  //bottom left quarter
+
+
+            float angleRad = glm::radians(drone1.rotation);
+            glm::vec3 lookDirection(-sin(angleRad), 0.0f, -cos(angleRad));
+            glm::mat4 drone1View = glm::lookAt(
+                glm::vec3(drone1CameraPosition.x, drone1.height, drone1CameraPosition.z), // Camera position (below the drone) start 30, height, 24
+                glm::vec3(drone1CameraPosition.x + lookDirection.x, drone1.height, drone1CameraPosition.z + lookDirection.z), // Look to front start 30, 8.5, 25
+                glm::vec3(0.0f, 1.0f, 0.0f)
+            );
+            shaderProgram.setMat4("uV", drone1View);
+            shaderProgram.setMat4("uP", projection);
+
+            shaderProgram.setMat4("uM", majevicaModelMatrix);
+            majevicaModel.Draw(shaderProgram);
+        }
+        else {
+            glDisable(GL_DEPTH_TEST);
+            glScissor(0, 0, viewportWidth, viewportHeight);
+            glEnable(GL_SCISSOR_TEST);
+            glClearColor(0.0, 0.f, 0.f, 1.0f); // black for background
+            glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+            glEnable(GL_DEPTH_TEST);
+            glDisable(GL_SCISSOR_TEST);
+            glViewport(0, 0, wWidth / 2, wHeight / 2);
+
+            glm::mat4 orthoProjection = glm::ortho(0.0f, static_cast<float>(viewportWidth),
+                0.0f, static_cast<float>(viewportHeight));
+            shaderProgram.setMat4("projection", orthoProjection);
+            shaderProgram.setMat4("model", glm::mat4(1.0f));
+
+            //static texture
+            glUseProgram(staticShader1);
+            int uTime = glGetUniformLocation(staticShader1, "uTime");
+            glUniform1f(uTime, static_cast<float>(glfwGetTime()));
+            glActiveTexture(GL_TEXTURE0);
+            glBindTexture(GL_TEXTURE_2D, static5);
+            glBindVertexArray(staticVAO);
+            glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+            glBindVertexArray(0);
+        }
+
+
+        //second drone camera view
+        if (drone2.cameraOn && !drone2.destroyed) {
+            if (!drone1.cameraOn || drone1.destroyed) {
+                shaderProgram.use();
+                shaderProgram.setMat4("projection", projection);
+            }
+            glDisable(GL_DEPTH_TEST);
+            glScissor(wWidth / 2, 0, viewportWidth, viewportHeight);
+            glEnable(GL_SCISSOR_TEST);
+            glClearColor(0.529f, 0.808f, 0.922f, 1.0f); // blue
+            glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+            glEnable(GL_DEPTH_TEST);
+            glDisable(GL_SCISSOR_TEST);
+            glViewport(wWidth / 2, 0, wWidth / 2, wHeight / 2);
+
+            float angleRad = glm::radians(drone2.rotation);
+            glm::vec3 lookDirection(-sin(angleRad), 0.0f, -cos(angleRad));
+            glm::mat4 drone2View = glm::lookAt(
+                glm::vec3(drone2CameraPosition.x, drone2.height, drone2CameraPosition.z), // Camera position (below the drone) start -18, height, 24
+                glm::vec3(drone2CameraPosition.x + lookDirection.x, drone2.height, drone2CameraPosition.z + lookDirection.z), // Look to front start -18, 8.5, 25
+                glm::vec3(0.0f, 1.0f, 0.0f)
+            );
+            shaderProgram.setMat4("uV", drone2View);
+            shaderProgram.setMat4("uP", projection);
+
+            shaderProgram.setMat4("uM", majevicaModelMatrix);
+            majevicaModel.Draw(shaderProgram);
+        }
+        else {
+            glDisable(GL_DEPTH_TEST);
+            glScissor(wWidth / 2, 0, viewportWidth, viewportHeight);
+            glEnable(GL_SCISSOR_TEST);
+            glClearColor(0.0, 0.f, 0.f, 1.0f); // black for background
+            glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+            glEnable(GL_DEPTH_TEST);
+            glDisable(GL_SCISSOR_TEST);
+            glViewport(wWidth / 2, 0, wWidth / 2, wHeight / 2);
+
+            glm::mat4 orthoProjection = glm::ortho(0.0f, static_cast<float>(viewportWidth),
+                0.0f, static_cast<float>(viewportHeight));
+            shaderProgram.setMat4("projection", orthoProjection);
+            shaderProgram.setMat4("model", glm::mat4(1.0f));
+
+            //static texture
+            glUseProgram(staticShader2);
+            int uTime = glGetUniformLocation(staticShader2, "uTime");
+            glUniform1f(uTime, static_cast<float>(glfwGetTime()));
+            glActiveTexture(GL_TEXTURE0);
+            glBindTexture(GL_TEXTURE_2D, static4);
+            glBindVertexArray(staticVAO);
+            glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+            glBindVertexArray(0);
+        }
 
 
         // ++++++++++++++++++++++++++++++++++++++++++++++++++++++            CRTANJE 2D DELA            +++++++++++++++++++++++++++++++++++++++++++++++++
@@ -2153,6 +2410,8 @@ int main(void)
     glDeleteProgram(unifiedShader);
     glDeleteProgram(textureShader);
     glDeleteProgram(mapShader);
+    glDeleteProgram(staticShader1);
+    glDeleteProgram(staticShader2);
 
     glDeleteTextures(1, &mapTexture);
     glDeleteBuffers(1, &VBO);
