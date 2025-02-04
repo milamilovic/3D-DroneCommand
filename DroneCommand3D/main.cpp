@@ -121,13 +121,19 @@ struct Drone {
     float height;
     bool cameraOn;
 };
-Drone drone1 = { -0.5f, -0.5f, 0.05f, 100.0f, false, false, 0, false };
-Drone drone2 = { 0.5f, -0.5f, 0.05f, 100.0f, false, false, 0, false };
+Drone drone1 = { -0.5f, -0.5f, 0.05f, 100.0f, false, false, 5.0f, false };
+Drone drone2 = { 0.5f, -0.5f, 0.05f, 100.0f, false, false, 5.0f, false };
+glm::vec3 drone1Position = glm::vec3(-18.0f, 5.0f, 19.0f);
+glm::vec3 drone2Position = glm::vec3(15.0f, 5.0f, 19.0f);
+glm::vec3 drone1CameraPosition = glm::vec3(-18.0f, 9.0f, 19.0f);
+glm::vec3 drone2CameraPosition = glm::vec3(15.0f, 9.0f, 19.0f);
+float moveSpeed = 0.16f;
+float cameraMoveSpeed = 0.26f;
 
 void updateDroneVertices(const Drone& drone, float vertices[], float aspectRatio) {
     const float centerX = drone.x;
     const float centerY = drone.y;
-    const float radius = drone.radius + 0.0005 * drone.height;
+    const float radius = drone.radius - 0.01 * (5.0 - drone.height);
     const int numPoints = 30;
 
     vertices[0] = drone.x;      // X
@@ -186,6 +192,15 @@ struct NoFlyZone {
 NoFlyZone noFlyZone = { 0.05f, -0.07f, 0.20f, false, false };
 
 bool areClashing(float x1, float y1, float r1, float x2, float y2, float r2) {
+    float dx = (x2 - x1) * 4 / 3;
+    float dy = y2 - y1;
+    float distance = std::sqrt(dx * dx + dy * dy);
+    return distance <= (r1 + r2);
+}
+
+bool areDronesClashing(float x1, float y1, float r1, float x2, float y2, float r2) {
+    //if the height difference is too big they are not clashing
+    if (abs(drone1.height - drone2.height) > 2) return false;
     float dx = (x2 - x1) * 4 / 3;
     float dy = y2 - y1;
     float distance = std::sqrt(dx * dx + dy * dy);
@@ -1544,39 +1559,86 @@ int main(void)
                 }
             }
             if (drone1.active && !drone1.destroyed) {
-                if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS) {
-                    drone1.y += 0.005;
-                    if (drone1.y > 1) drone1.destroyed = true;
+
+                if ((glfwGetKey(window, GLFW_KEY_LEFT_CONTROL) == GLFW_PRESS ||
+                    glfwGetKey(window, GLFW_KEY_RIGHT_CONTROL) == GLFW_PRESS) &&
+                    glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS) {
+                    drone1.height += 0.1;
+                    drone1Position.y += 0.1;
                 }
-                if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS) {
-                    drone1.y -= 0.005;
-                    if (drone1.y < -0.65) drone1.destroyed = true;
+                else if ((glfwGetKey(window, GLFW_KEY_LEFT_CONTROL) == GLFW_PRESS ||
+                    glfwGetKey(window, GLFW_KEY_RIGHT_CONTROL) == GLFW_PRESS) &&
+                    glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS) {
+                    drone1.height -= 0.1;
+                    drone1Position.y -= 0.1;
                 }
-                if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS) {
-                    drone1.x -= 0.005;
-                    if (drone1.x < -1) drone1.destroyed = true;
-                }
-                if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS) {
-                    drone1.x += 0.005;
-                    if (drone1.x > 1) drone1.destroyed = true;
+                else {
+                    if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS) {
+                        drone1.y += 0.005;
+                        drone1Position.z -= moveSpeed;
+                        drone1CameraPosition.z -= cameraMoveSpeed;
+                        if (drone1.y > 1) drone1.destroyed = true;
+                    }
+                    if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS) {
+                        drone1.y -= 0.005;
+                        drone1Position.z += moveSpeed;
+                        drone1CameraPosition.z += cameraMoveSpeed;
+                        if (drone1.y < -0.65) drone1.destroyed = true;
+                    }
+                    if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS) {
+                        drone1.x -= 0.005;
+                        drone1Position.x -= moveSpeed;
+                        drone1CameraPosition.x -= cameraMoveSpeed;
+                        if (drone1.x < -1) drone1.destroyed = true;
+                    }
+                    if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS) {
+                        drone1.x += 0.005;
+                        drone1Position.x += moveSpeed;
+                        drone1CameraPosition.x += cameraMoveSpeed;
+                        if (drone1.x > 1) drone1.destroyed = true;
+                    }
                 }
             }
             if (drone2.active && !drone2.destroyed) {
-                if (glfwGetKey(window, GLFW_KEY_UP) == GLFW_PRESS) {
-                    drone2.y += 0.005;
-                    if (drone2.y > 1) drone2.destroyed = true;
+                //change height
+                if ((glfwGetKey(window, GLFW_KEY_LEFT_CONTROL) == GLFW_PRESS ||
+                    glfwGetKey(window, GLFW_KEY_RIGHT_CONTROL) == GLFW_PRESS) &&
+                    glfwGetKey(window, GLFW_KEY_UP) == GLFW_PRESS) {
+                    drone2.height += 0.1;
+                    drone2Position.y += 0.1;
                 }
-                if (glfwGetKey(window, GLFW_KEY_DOWN) == GLFW_PRESS) {
-                    drone2.y -= 0.005;
-                    if (drone2.y < -0.65) drone2.destroyed = true;
+                else if ((glfwGetKey(window, GLFW_KEY_LEFT_CONTROL) == GLFW_PRESS ||
+                    glfwGetKey(window, GLFW_KEY_RIGHT_CONTROL) == GLFW_PRESS) &&
+                    glfwGetKey(window, GLFW_KEY_DOWN) == GLFW_PRESS) {
+                    drone2.height -= 0.1;
+                    drone1Position.y -= 0.1;
                 }
-                if (glfwGetKey(window, GLFW_KEY_LEFT) == GLFW_PRESS) {
-                    drone2.x -= 0.005;
-                    if (drone2.x < -1) drone2.destroyed = true;
-                }
-                if (glfwGetKey(window, GLFW_KEY_RIGHT) == GLFW_PRESS) {
-                    drone2.x += 0.005;
-                    if (drone2.x > 1) drone2.destroyed = true;
+                else {
+                    //left right up down
+                    if (glfwGetKey(window, GLFW_KEY_UP) == GLFW_PRESS) {
+                        drone2.y += 0.005;
+                        drone2Position.z -= moveSpeed;
+                        drone2CameraPosition.z -= cameraMoveSpeed;
+                        if (drone2.y > 1) drone2.destroyed = true;
+                    }
+                    if (glfwGetKey(window, GLFW_KEY_DOWN) == GLFW_PRESS) {
+                        drone2.y -= 0.005;
+                        drone2Position.z += moveSpeed;
+                        drone2CameraPosition.z += cameraMoveSpeed;
+                        if (drone2.y < -0.65) drone2.destroyed = true;
+                    }
+                    if (glfwGetKey(window, GLFW_KEY_LEFT) == GLFW_PRESS) {
+                        drone2.x -= 0.005;
+                        drone2Position.x -= moveSpeed;
+                        drone2CameraPosition.x -= cameraMoveSpeed;
+                        if (drone2.x < -1) drone2.destroyed = true;
+                    }
+                    if (glfwGetKey(window, GLFW_KEY_RIGHT) == GLFW_PRESS) {
+                        drone2.x += 0.005;
+                        drone2Position.x += moveSpeed;
+                        drone2CameraPosition.x += cameraMoveSpeed;
+                        if (drone2.x > 1) drone2.destroyed = true;
+                    }
                 }
             }
             if (drone1.active && drone1.batteryLevel > 0) {
@@ -1608,7 +1670,7 @@ int main(void)
             }
 
             //2 drones
-            if (areClashing(drone1.x, drone1.y, drone1.radius, drone2.x, drone2.y, drone2.radius)) {
+            if (areDronesClashing(drone1.x, drone1.y, drone1.radius, drone2.x, drone2.y, drone2.radius)) {
                 drone1.destroyed = true;
                 drone2.destroyed = true;
             }
@@ -1732,21 +1794,25 @@ int main(void)
         majevicaModel.Draw(shaderProgram);
 
         // render the first drone model
-        glm::mat4 droneModel1 = glm::mat4(1.0f);
-        droneModel1 = glm::scale(droneModel1, glm::vec3(0.8f, 0.8f, 0.8f));
-        droneModel1 = glm::translate(droneModel1, glm::vec3(15.0f, 9.0f, 19.0f));
-        shaderProgram.setMat4("model", droneModel1);
-        shaderProgram.setMat4("uM", droneModel1);
-        //shaderProgram.setVec3("objectColor", glm::vec3(0.0f, 1.0f, 0.0f));
-        droneModel.Draw(shaderProgram);
+        if (!drone1.destroyed) {
+            glm::mat4 droneModel1 = glm::mat4(1.0f);
+            droneModel1 = glm::scale(droneModel1, glm::vec3(0.8f, 0.8f, 0.8f));
+            droneModel1 = glm::translate(droneModel1, drone1Position);
+            shaderProgram.setMat4("model", droneModel1);
+            shaderProgram.setMat4("uM", droneModel1);
+            //shaderProgram.setVec3("objectColor", glm::vec3(0.0f, 1.0f, 0.0f));
+            droneModel.Draw(shaderProgram);
+        }
 
         // render the second drone model
-        glm::mat4 droneModel2 = glm::mat4(1.0f);
-        droneModel2 = glm::scale(droneModel2, glm::vec3(0.8f, 0.8f, 0.8f));
-        droneModel2 = glm::translate(droneModel2, glm::vec3(-18.0f, 9.0f, 19.0f));
-        shaderProgram.setMat4("model", droneModel2);
-        shaderProgram.setMat4("uM", droneModel2);
-        droneModel.Draw(shaderProgram);
+        if (!drone2.destroyed) {
+            glm::mat4 droneModel2 = glm::mat4(1.0f);
+            droneModel2 = glm::scale(droneModel2, glm::vec3(0.8f, 0.8f, 0.8f));
+            droneModel2 = glm::translate(droneModel2, drone2Position);
+            shaderProgram.setMat4("model", droneModel2);
+            shaderProgram.setMat4("uM", droneModel2);
+            droneModel.Draw(shaderProgram);
+        }
 
 
 
@@ -1761,8 +1827,8 @@ int main(void)
             glDisable(GL_SCISSOR_TEST);
             glViewport(0, 0, wWidth / 2, wHeight / 2);  //bottom left quarter
             glm::mat4 drone1View = glm::lookAt(
-                glm::vec3(30.0f, 8.0f, 24.0f), // Camera position (below the drone)
-                glm::vec3(30.0f, 8.5f, 25.0f), // Look to front
+                glm::vec3(drone1CameraPosition.x, drone1.height, drone1CameraPosition.z), // Camera position (below the drone) start 30, height, 24
+                glm::vec3(drone1CameraPosition.x, drone1.height, drone1CameraPosition.z + 1), // Look to front start 30, 8.5, 25
                 glm::vec3(0.0f, 1.0f, 0.0f)
             );
             shaderProgram.setMat4("uV", drone1View);
@@ -1800,9 +1866,9 @@ int main(void)
 
         //second drone camera view
         if (drone2.cameraOn && !drone2.destroyed) {
-            if (!drone1.cameraOn) {
-                shaderProgram.setMat4("projection", projection);
+            if (!drone1.cameraOn || drone1.destroyed) {
                 shaderProgram.use();
+                shaderProgram.setMat4("projection", projection);
             }
             glDisable(GL_DEPTH_TEST);
             glScissor(wWidth / 2, 0, viewportWidth, viewportHeight);
@@ -1813,8 +1879,8 @@ int main(void)
             glDisable(GL_SCISSOR_TEST);
             glViewport(wWidth / 2, 0, wWidth / 2, wHeight / 2);
             glm::mat4 drone2View = glm::lookAt(
-                glm::vec3(-18.0f, 8.0f, 24.0f), // Camera position (below the drone)
-                glm::vec3(-18.0f, 8.5f, 25.0f), // Look to front
+                glm::vec3(drone2CameraPosition.x, drone2.height, drone2CameraPosition.z), // Camera position (below the drone) start -18, height, 24
+                glm::vec3(drone2CameraPosition.x, drone2.height, drone2CameraPosition.z + 1), // Look to front start -18, 8.5, 25
                 glm::vec3(0.0f, 1.0f, 0.0f)
             );
             shaderProgram.setMat4("uV", drone2View);
