@@ -390,6 +390,12 @@ bool checkTriangleCollision(glm::vec3 dronePos, float droneRadius, const std::ve
     return false;
 }
 
+void updateBattery(Drone& drone) {
+    if (drone.active) drone.batteryLevel -= 0.1f;
+    if (drone.cameraOn) drone.batteryLevel -= 0.02f;
+    if (drone.batteryLevel <= 0.0f) drone.destroyed = true;
+}
+
 
 int main(void)
 {
@@ -1591,44 +1597,20 @@ int main(void)
                 noFlyZone = { 0.05f, -0.07f, 0.20f, false, false };
             }
             if (glfwGetKey(window, GLFW_KEY_U) == GLFW_PRESS) {
-                if (glfwGetKey(window, GLFW_KEY_1) == GLFW_PRESS) {
-                    drone1.active = true;
-                }
-            }
-            if (glfwGetKey(window, GLFW_KEY_U) == GLFW_PRESS) {
-                if (glfwGetKey(window, GLFW_KEY_2) == GLFW_PRESS) {
-                    drone2.active = true;
-                }
+                if (glfwGetKey(window, GLFW_KEY_1) == GLFW_PRESS) drone1.active = true;
+                else if (glfwGetKey(window, GLFW_KEY_2) == GLFW_PRESS) drone2.active = true;
             }
             if (glfwGetKey(window, GLFW_KEY_I) == GLFW_PRESS) {
-                if (glfwGetKey(window, GLFW_KEY_1) == GLFW_PRESS) {
-                    drone1.active = false;
-                }
-            }
-            if (glfwGetKey(window, GLFW_KEY_I) == GLFW_PRESS) {
-                if (glfwGetKey(window, GLFW_KEY_2) == GLFW_PRESS) {
-                    drone2.active = false;
-                }
+                if (glfwGetKey(window, GLFW_KEY_1) == GLFW_PRESS) drone1.active = false;
+                else if (glfwGetKey(window, GLFW_KEY_2) == GLFW_PRESS) drone2.active = false;
             }
             if (glfwGetKey(window, GLFW_KEY_C) == GLFW_PRESS) {
-                if (glfwGetKey(window, GLFW_KEY_1) == GLFW_PRESS) {
-                    drone1.cameraOn = true;
-                }
-            }
-            if (glfwGetKey(window, GLFW_KEY_C) == GLFW_PRESS) {
-                if (glfwGetKey(window, GLFW_KEY_2) == GLFW_PRESS) {
-                    drone2.cameraOn = true;
-                }
+                if (glfwGetKey(window, GLFW_KEY_1) == GLFW_PRESS) drone1.cameraOn = true;
+                else if (glfwGetKey(window, GLFW_KEY_2) == GLFW_PRESS) drone2.cameraOn = true;
             }
             if (glfwGetKey(window, GLFW_KEY_X) == GLFW_PRESS) {
-                if (glfwGetKey(window, GLFW_KEY_1) == GLFW_PRESS) {
-                    drone1.cameraOn = false;
-                }
-            }
-            if (glfwGetKey(window, GLFW_KEY_X) == GLFW_PRESS) {
-                if (glfwGetKey(window, GLFW_KEY_2) == GLFW_PRESS) {
-                    drone2.cameraOn = false;
-                }
+                if (glfwGetKey(window, GLFW_KEY_1) == GLFW_PRESS) drone1.cameraOn = false;
+                else if (glfwGetKey(window, GLFW_KEY_2) == GLFW_PRESS) drone2.cameraOn = false;
             }
 
             if (drone1.active && !drone1.destroyed) {
@@ -1819,33 +1801,8 @@ int main(void)
                 }
             }
 
-            if (drone1.active && drone1.batteryLevel > 0) {
-                drone1.batteryLevel -= 0.1f;
-            }
-            if (drone2.active && drone2.batteryLevel > 0) {
-                drone2.batteryLevel -= 0.1f;
-            }
-
-            if (drone1.cameraOn) {
-                drone1.batteryLevel -= 0.02;
-            }
-            if (drone2.cameraOn) {
-                drone2.batteryLevel -= 0.02;
-            }
-
-            if (drone1.destroyed) {
-                drone1.batteryLevel = 0.0f;
-            }
-            if (drone2.destroyed) {
-                drone2.batteryLevel = 0.0f;
-            }
-
-            if (drone1.batteryLevel <= 0.0f) {
-                drone1.destroyed = true;
-            }
-            if (drone2.batteryLevel <= 0.0f) {
-                drone2.destroyed = true;
-            }
+            updateBattery(drone1);
+            updateBattery(drone2);
 
             //2 drones
             if (areDronesClashing(drone1.x, drone1.y, drone1.radius, drone2.x, drone2.y, drone2.radius)) {
