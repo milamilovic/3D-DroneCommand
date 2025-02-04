@@ -1706,6 +1706,23 @@ int main(void)
                     drone1.y = drone1Temp2D.y;
                 }
             }
+            //going down if drone is not active
+            else if (!drone1.active && !drone1.destroyed) {
+                drone1Temp = drone1Position;
+                int heightTemp = drone1.height;
+                bool changedHeight = false;
+                drone1Temp.y -= 0.3f;
+                heightTemp -= 0.3f;
+                changedHeight = true;
+                if (!checkTriangleCollision(drone1Temp, 0.5f, majevicaTriangles)) {
+                    drone1Position.x = drone1Temp.x;
+                    drone1Position.z = drone1Temp.z;
+                    if (changedHeight) {
+                        drone1.height -= 0.1;
+                        drone1Position.y -= 0.1;
+                    }
+                }
+            }
 
             if (drone2.active && !drone2.destroyed) {
 
@@ -1782,6 +1799,23 @@ int main(void)
                     drone2CameraPosition = drone2CameraTemp;
                     drone2.x = drone2Temp2D.x;
                     drone2.y = drone2Temp2D.y;
+                }
+            }
+            //going down if drone is not active
+            else if (!drone2.active && !drone2.destroyed) {
+                drone2Temp = drone2Position;
+                int heightTemp = drone2.height;
+                bool changedHeight = false;
+                drone2Temp.y -= 0.3f;
+                heightTemp -= 0.3f;
+                changedHeight = true;
+                if (!checkTriangleCollision(drone2Temp, 0.5f, majevicaTriangles)) {
+                    drone2Position.x = drone2Temp.x;
+                    drone2Position.z = drone2Temp.z;
+                    if (changedHeight) {
+                        drone2.height -= 0.1;
+                        drone2Position.y -= 0.1;
+                    }
                 }
             }
 
