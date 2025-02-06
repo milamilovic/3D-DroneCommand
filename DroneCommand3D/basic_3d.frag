@@ -10,6 +10,8 @@ uniform vec3 viewPos;    // Camera position
 uniform vec3 lightColor; // Light color
 uniform vec3 objectColor; // Object base color
 uniform sampler2D texture1; // Texture sampler
+uniform sampler2D specularMap; // Specular map
+uniform bool specular;
 
 void main()
 {
@@ -24,7 +26,10 @@ void main()
     vec3 diffuse = diff * lightColor;
 
     // Specular lighting
-    float specularStrength = 0.4;
+    float specularStrength = 0.2;
+    if (specular) {
+        specularStrength = texture(specularMap, chUV).r;
+    }
     vec3 viewDir = normalize(viewPos - FragPos);
     vec3 reflectDir = reflect(-lightDir, norm);
     float spec = pow(max(dot(viewDir, reflectDir), 0.0), 32);
