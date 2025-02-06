@@ -124,16 +124,16 @@ struct Drone {
 };
 Drone drone1 = { -0.5f, -0.5f, 0.05f, 100.0f, false, false, 5.0f, false, 0.0f };
 Drone drone2 = { 0.5f, -0.5f, 0.05f, 100.0f, false, false, 5.0f, false, 0.0f };
-glm::vec3 drone1Position = glm::vec3(-18.0f, 5.0f, 19.0f);
-glm::vec3 drone2Position = glm::vec3(15.0f, 5.0f, 19.0f);
-glm::vec3 drone1Temp = glm::vec3(-18.0f, 5.0f, 19.0f);
-glm::vec3 drone2Temp = glm::vec3(15.0f, 5.0f, 19.0f);
+glm::vec3 drone1Position = glm::vec3(-19.0f, 5.0f, 22.0f);
+glm::vec3 drone2Position = glm::vec3(18.0f, 5.0f, 22.0f);
+glm::vec3 drone1Temp = glm::vec3(-19.0f, 5.0f, 22.0f);
+glm::vec3 drone2Temp = glm::vec3(18.0f, 5.0f, 22.0f);
 glm::vec2 drone1Temp2D = glm::vec2(-0.5f, -0.5f);
 glm::vec2 drone2Temp2D = glm::vec2(0.5f, -0.5f);
-glm::vec3 drone1CameraPosition = glm::vec3(-18.0f, 9.0f, 19.0f);
-glm::vec3 drone2CameraPosition = glm::vec3(15.0f, 9.0f, 19.0f);
-glm::vec3 drone1CameraTemp = glm::vec3(-18.0f, 9.0f, 19.0f);
-glm::vec3 drone2CameraTemp = glm::vec3(15.0f, 9.0f, 19.0f);
+glm::vec3 drone1CameraPosition = glm::vec3(-19.0f, 9.0f, 22.0f);
+glm::vec3 drone2CameraPosition = glm::vec3(18.0f, 9.0f, 22.0f);
+glm::vec3 drone1CameraTemp = glm::vec3(-19.0f, 9.0f, 22.0f);
+glm::vec3 drone2CameraTemp = glm::vec3(18.0f, 9.0f, 22.0f);
 float moveSpeed = 0.16f;
 float cameraMoveSpeed = 0.26f;
 float rotationSpeed = 2.0f;
@@ -391,8 +391,8 @@ bool checkTriangleCollision(glm::vec3 dronePos, float droneRadius, const std::ve
 }
 
 void updateBattery(Drone& drone) {
-    if (drone.active) drone.batteryLevel -= 0.1f;
-    if (drone.cameraOn) drone.batteryLevel -= 0.02f;
+    if (drone.active) drone.batteryLevel -= 0.05f;
+    if (drone.cameraOn) drone.batteryLevel -= 0.01f;
     if (drone.batteryLevel <= 0.0f) drone.destroyed = true;
 }
 
@@ -466,7 +466,7 @@ int main(void)
     updateProgressVertices(-0.9f, -0.86f, 0.6f, 0.08f, drone2.batteryLevel / 100.0f, 0.329f, 0.612f, 0.404f, progressVertices2);
     
     //3d
-    Shader shaderProgram("basic_3d.vert", "basic_3d.frag"); // Adjust paths if needed
+    Shader shaderProgram("basic_3d.vert", "basic_3d.frag");
     Model droneModel("res/drone.obj");
     Model majevicaModel("res/majevicamala.obj");
 
@@ -1543,6 +1543,8 @@ int main(void)
     unsigned static4 = loadAndConfigureTexture("res/static4.jpg", textureShader, "uTex", 0);
     unsigned static5 = loadAndConfigureTexture("res/static5.jpg", textureShader, "uTex", 0);
     unsigned mapTexture = loadAndConfigureTexture("res/majevica.jpg", mapShader, "uTex", 0);
+    unsigned majevicaSpecularMap = loadImageToTexture("res/majevicaSpek.jpg");
+
 
 
 
@@ -1556,6 +1558,17 @@ int main(void)
     shaderProgram.setMat4("uM", model);    // Set model matrix
     shaderProgram.setMat4("uV", view);     // Set view matrix
     shaderProgram.setMat4("uP", projection); // Set projection matrix
+
+    glEnable(GL_LIGHTING);
+    glEnable(GL_LIGHT0);
+
+    shaderProgram.setVec3("uPoints[0].col", 0.7f, 0.0f, 0.0f);      //red
+    shaderProgram.setVec3("uPoints[1].col", 0.0f, 0.7f, 0.0f);      //green
+    shaderProgram.setVec3("uPoints[2].col", 0.8f, 0.8f, 0.8f);      //white
+    shaderProgram.setVec3("uPoints[3].col", 0.7f, 0.0f, 0.0f);      //red
+    shaderProgram.setVec3("uPoints[4].col", 0.0f, 0.7f, 0.0f);      //green
+    shaderProgram.setVec3("uPoints[5].col", 0.8f, 0.8f, 0.8f);      //white
+
 
     glm::mat4 majevicaModelMatrix = glm::mat4(1.0f);
 
@@ -1687,6 +1700,10 @@ int main(void)
                     drone1.x = drone1Temp2D.x;
                     drone1.y = drone1Temp2D.y;
                 }
+                //drone gets destroyed all the time if he dies when touching ground
+                //else {
+                //    drone1.destroyed = true;
+                //}
             }
             //going down if drone is not active
             else if (!drone1.active && !drone1.destroyed) {
@@ -1782,6 +1799,10 @@ int main(void)
                     drone2.x = drone2Temp2D.x;
                     drone2.y = drone2Temp2D.y;
                 }
+                //drone gets destroyed all the time if he dies when touching ground
+                //else {
+                //    drone2.destroyed = true;
+                //}
             }
             //going down if drone is not active
             else if (!drone2.active && !drone2.destroyed) {
@@ -1895,9 +1916,9 @@ int main(void)
         // Clear the screen
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-        shaderProgram.setVec3("lightPos", glm::vec3(0.0f, 0.0f, 10.0f));
-        shaderProgram.setVec3("viewPos", glm::vec3(0.0f, 0.0f, 100.0f)); // Camera position
-        shaderProgram.setVec3("lightColor", glm::vec3(1.0f, 1.0f, 1.0f)); // White light
+        shaderProgram.setVec3("lightPos", glm::vec3(0.0f, 20.0f, 0.0f));
+        shaderProgram.setVec3("viewPos", glm::vec3(0.0f, 50.0f, 0.2f)); // Camera position
+        shaderProgram.setVec3("lightColor", glm::vec3(0.8f, 0.8f, 0.8f)); // White light
 
 
         // ++++++++++++++++++++++++++++++++++++++++++++++++++++++            CRTANJE 3D DELA            +++++++++++++++++++++++++++++++++++++++++++++++++
@@ -1922,6 +1943,46 @@ int main(void)
         shaderProgram.setMat4("uV", view);
         shaderProgram.setMat4("uP", projection);
 
+        //TODO: point lights
+        //this should work but does not
+        //colors are set with other uniforms
+        if (!drone1.destroyed)
+        {
+            shaderProgram.setVec3("uPoints[0].pos", drone1CameraPosition.x - 13, drone1.height, drone1CameraPosition.z + 10);
+            shaderProgram.setVec3("uPoints[1].pos", drone1CameraPosition.x - 11, drone1.height, drone1CameraPosition.z + 10);
+            shaderProgram.setVec3("uPoints[2].pos", drone1CameraPosition.x - 12, drone1.height, drone1CameraPosition.z + 14);
+            shaderProgram.setFloat("uPoints[0].diffuseStrength", 0.2f);
+            shaderProgram.setFloat("uPoints[1].diffuseStrength", 0.2f);
+            shaderProgram.setFloat("uPoints[2].diffuseStrength", 0.1f);
+        }
+        else {
+            shaderProgram.setFloat("uPoints[0].diffuseStrength", 0.0f);
+            shaderProgram.setFloat("uPoints[1].diffuseStrength", 0.0f);
+            shaderProgram.setFloat("uPoints[2].diffuseStrength", 0.0f);
+        }
+        if (!drone2.destroyed)
+        {
+            shaderProgram.setVec3("uPoints[3].pos", drone2CameraPosition.x + 5, drone2.height, drone2CameraPosition.z + 10);
+            shaderProgram.setVec3("uPoints[4].pos", drone2CameraPosition.x + 7, drone2.height, drone2CameraPosition.z + 10);
+            shaderProgram.setVec3("uPoints[5].pos", drone2CameraPosition.x + 6, drone2.height, drone2CameraPosition.z + 14);
+            shaderProgram.setFloat("uPoints[3].diffuseStrength", 0.2f);
+            shaderProgram.setFloat("uPoints[4].diffuseStrength", 0.2f);
+            shaderProgram.setFloat("uPoints[5].diffuseStrength", 0.1f);
+        }
+        else {
+            shaderProgram.setFloat("uPoints[3].diffuseStrength", 0.0f);
+            shaderProgram.setFloat("uPoints[4].diffuseStrength", 0.0f);
+            shaderProgram.setFloat("uPoints[5].diffuseStrength", 0.0f);
+        }
+
+        //TODO: spekularna mapa 
+        //ovo bi trebalo da radi ali ne vidim razliku
+        shaderProgram.setInt("specularMap", majevicaSpecularMap);
+        shaderProgram.setBool("specular", true);
+        glActiveTexture(GL_TEXTURE1);
+        glBindTexture(GL_TEXTURE_2D, majevicaSpecularMap);
+        shaderProgram.setInt("specularMap", 1);
+
         // render the majevica model
         majevicaModelMatrix = glm::mat4(1.0f);
         shaderProgram.setMat4("model", majevicaModelMatrix);
@@ -1937,26 +1998,36 @@ int main(void)
             droneModel1 = glm::translate(droneModel1, drone1Position);
             shaderProgram.setMat4("model", droneModel1);
             shaderProgram.setMat4("uM", droneModel1);
+            shaderProgram.setBool("specular", false);
             //shaderProgram.setVec3("objectColor", glm::vec3(0.0f, 1.0f, 0.0f));
+    
+            // Disable specular map by binding an empty texture
+            glActiveTexture(GL_TEXTURE1);
+            glBindTexture(GL_TEXTURE_2D, 0);
+
             droneModel.Draw(shaderProgram);
         }
 
         // render the second drone model
         if (!drone2.destroyed) {
             droneModel2 = glm::mat4(1.0f);
-            // ovo postavlja dron na world center i tada dobro rotira ali se ne pomera :)
+            //TODO: rotiranje
+            //ovo postavlja dron na world center i tada dobro rotira ali se ne pomera :)
             //droneModel2 = glm::translate(droneModel2, glm::vec3(0, 0, 0));
             //droneModel2 = glm::rotate(droneModel2, glm::radians(drone2.rotation), glm::vec3(0.0f, 1.0f, 0.0f));
             droneModel2 = glm::rotate(droneModel2, glm::radians(drone2.rotation), drone2Position);
-            droneModel2 = glm::translate(droneModel2, drone2Position);
             droneModel2 = glm::scale(droneModel2, glm::vec3(0.8f, 0.8f, 0.8f));
+            droneModel2 = glm::translate(droneModel2, drone2Position);
             shaderProgram.setMat4("model", droneModel2);
             shaderProgram.setMat4("uM", droneModel2);
-            droneModel.Draw(shaderProgram);
+            shaderProgram.setBool("specular", false);
 
-            if (checkTriangleCollision(drone2Position, 0.5f, majevicaTriangles)) {
-                std::cout << "Drone 2 collided with Majevica!" << std::endl;
-            }
+            // Disable specular map by binding an empty texture
+            glActiveTexture(GL_TEXTURE1);
+            glBindTexture(GL_TEXTURE_2D, 0);
+
+
+            droneModel.Draw(shaderProgram);
         }
 
 
@@ -1980,6 +2051,8 @@ int main(void)
                 glm::vec3(drone1CameraPosition.x + lookDirection.x, drone1.height, drone1CameraPosition.z + lookDirection.z), // Look to front start 30, 8.5, 25
                 glm::vec3(0.0f, 1.0f, 0.0f)
             );
+
+            shaderProgram.setVec3("viewPos", glm::vec3(drone1CameraPosition.x, drone1.height, drone1CameraPosition.z)); // Camera position
             shaderProgram.setMat4("uV", drone1View);
             shaderProgram.setMat4("uP", projection);
 
@@ -2035,6 +2108,8 @@ int main(void)
                 glm::vec3(drone2CameraPosition.x + lookDirection.x, drone2.height, drone2CameraPosition.z + lookDirection.z), // Look to front start -18, 8.5, 25
                 glm::vec3(0.0f, 1.0f, 0.0f)
             );
+
+            shaderProgram.setVec3("viewPos", glm::vec3(drone2CameraPosition.x, drone2.height, drone2CameraPosition.z)); // Camera position
             shaderProgram.setMat4("uV", drone2View);
             shaderProgram.setMat4("uP", projection);
 
