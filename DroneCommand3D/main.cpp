@@ -1559,6 +1559,17 @@ int main(void)
     shaderProgram.setMat4("uV", view);     // Set view matrix
     shaderProgram.setMat4("uP", projection); // Set projection matrix
 
+    glEnable(GL_LIGHTING);
+    glEnable(GL_LIGHT0);
+
+    shaderProgram.setVec3("uPoints[0].col", 0.7f, 0.0f, 0.0f);      //red
+    shaderProgram.setVec3("uPoints[1].col", 0.0f, 0.7f, 0.0f);      //green
+    shaderProgram.setVec3("uPoints[2].col", 0.8f, 0.8f, 0.8f);      //white
+    shaderProgram.setVec3("uPoints[3].col", 0.7f, 0.0f, 0.0f);      //red
+    shaderProgram.setVec3("uPoints[4].col", 0.0f, 0.7f, 0.0f);      //green
+    shaderProgram.setVec3("uPoints[5].col", 0.8f, 0.8f, 0.8f);      //white
+
+
     glm::mat4 majevicaModelMatrix = glm::mat4(1.0f);
 
     majevicaTriangles = extractTriangles(majevicaModel, majevicaModelMatrix);
@@ -1689,6 +1700,10 @@ int main(void)
                     drone1.x = drone1Temp2D.x;
                     drone1.y = drone1Temp2D.y;
                 }
+                //drone gets destroyed all the time if he dies when touching ground
+                //else {
+                //    drone1.destroyed = true;
+                //}
             }
             //going down if drone is not active
             else if (!drone1.active && !drone1.destroyed) {
@@ -1784,6 +1799,10 @@ int main(void)
                     drone2.x = drone2Temp2D.x;
                     drone2.y = drone2Temp2D.y;
                 }
+                //drone gets destroyed all the time if he dies when touching ground
+                //else {
+                //    drone2.destroyed = true;
+                //}
             }
             //going down if drone is not active
             else if (!drone2.active && !drone2.destroyed) {
@@ -1897,7 +1916,7 @@ int main(void)
         // Clear the screen
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-        shaderProgram.setVec3("lightPos", glm::vec3(0.0f, 10.0f, 0.0f));
+        shaderProgram.setVec3("lightPos", glm::vec3(0.0f, 20.0f, 0.0f));
         shaderProgram.setVec3("viewPos", glm::vec3(0.0f, 50.0f, 0.2f)); // Camera position
         shaderProgram.setVec3("lightColor", glm::vec3(0.8f, 0.8f, 0.8f)); // White light
 
@@ -1923,6 +1942,38 @@ int main(void)
         shaderProgram.setMat4("uM", model);
         shaderProgram.setMat4("uV", view);
         shaderProgram.setMat4("uP", projection);
+
+        //TODO: point lights
+        //this should work but does not
+        //colors are set with other uniforms
+        if (!drone1.destroyed)
+        {
+            shaderProgram.setVec3("uPoints[0].pos", drone1CameraPosition.x - 13, drone1.height, drone1CameraPosition.z + 10);
+            shaderProgram.setVec3("uPoints[1].pos", drone1CameraPosition.x - 11, drone1.height, drone1CameraPosition.z + 10);
+            shaderProgram.setVec3("uPoints[2].pos", drone1CameraPosition.x - 12, drone1.height, drone1CameraPosition.z + 14);
+            shaderProgram.setFloat("uPoints[0].diffuseStrength", 0.2f);
+            shaderProgram.setFloat("uPoints[1].diffuseStrength", 0.2f);
+            shaderProgram.setFloat("uPoints[2].diffuseStrength", 0.1f);
+        }
+        else {
+            shaderProgram.setFloat("uPoints[0].diffuseStrength", 0.0f);
+            shaderProgram.setFloat("uPoints[1].diffuseStrength", 0.0f);
+            shaderProgram.setFloat("uPoints[2].diffuseStrength", 0.0f);
+        }
+        if (!drone2.destroyed)
+        {
+            shaderProgram.setVec3("uPoints[3].pos", drone2CameraPosition.x + 5, drone2.height, drone2CameraPosition.z + 10);
+            shaderProgram.setVec3("uPoints[4].pos", drone2CameraPosition.x + 7, drone2.height, drone2CameraPosition.z + 10);
+            shaderProgram.setVec3("uPoints[5].pos", drone2CameraPosition.x + 6, drone2.height, drone2CameraPosition.z + 14);
+            shaderProgram.setFloat("uPoints[3].diffuseStrength", 0.2f);
+            shaderProgram.setFloat("uPoints[4].diffuseStrength", 0.2f);
+            shaderProgram.setFloat("uPoints[5].diffuseStrength", 0.1f);
+        }
+        else {
+            shaderProgram.setFloat("uPoints[3].diffuseStrength", 0.0f);
+            shaderProgram.setFloat("uPoints[4].diffuseStrength", 0.0f);
+            shaderProgram.setFloat("uPoints[5].diffuseStrength", 0.0f);
+        }
 
         //TODO: spekularna mapa 
         //ovo bi trebalo da radi ali ne vidim razliku
@@ -2000,6 +2051,8 @@ int main(void)
                 glm::vec3(drone1CameraPosition.x + lookDirection.x, drone1.height, drone1CameraPosition.z + lookDirection.z), // Look to front start 30, 8.5, 25
                 glm::vec3(0.0f, 1.0f, 0.0f)
             );
+
+            shaderProgram.setVec3("viewPos", glm::vec3(drone1CameraPosition.x, drone1.height, drone1CameraPosition.z)); // Camera position
             shaderProgram.setMat4("uV", drone1View);
             shaderProgram.setMat4("uP", projection);
 
@@ -2055,6 +2108,8 @@ int main(void)
                 glm::vec3(drone2CameraPosition.x + lookDirection.x, drone2.height, drone2CameraPosition.z + lookDirection.z), // Look to front start -18, 8.5, 25
                 glm::vec3(0.0f, 1.0f, 0.0f)
             );
+
+            shaderProgram.setVec3("viewPos", glm::vec3(drone2CameraPosition.x, drone2.height, drone2CameraPosition.z)); // Camera position
             shaderProgram.setMat4("uV", drone2View);
             shaderProgram.setMat4("uP", projection);
 
