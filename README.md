@@ -2,6 +2,23 @@
 
 DroneCommand is an interactive control station for managing unmanned aerial vehicles (UAVs), featuring real-time map visualization, flight control, battery monitoring, no-fly zone management, and collision detection for seamless and safe drone operations.
 
+
+## Screenshots
+
+### Models
+![Drone model](https://github.com/user-attachments/assets/f9c5b8fc-6a81-4282-8271-e27683d101b5)
+
+![Majevica model with google images](https://github.com/user-attachments/assets/22831883-2242-4295-9395-ea049dc4faae)
+
+![Majevica model with the topographic map](https://github.com/user-attachments/assets/e9c6ad7c-8859-4f59-8437-04310c602d06)
+
+
+### Application
+![Starting screen with turned off cameras](https://github.com/user-attachments/assets/efe89f46-6145-4ba5-ac83-1b3ae9928008)
+
+![Screen with camera viewes](https://github.com/user-attachments/assets/3aec547e-6b57-48cf-bce0-ca06b91c95b1)
+
+
 ## Features
 
 ### Core Components
@@ -75,23 +92,6 @@ UAVs are automatically destroyed and permanently deactivated when:
 ### Visual Feedback
 - Destruction notifications appear on screen when UAVs are destroyed
 - Real-time battery and position monitoring
-
-## Screenshots
-
-### Models
-![Drone model](https://github.com/user-attachments/assets/f9c5b8fc-6a81-4282-8271-e27683d101b5)
-
-![Majevica model with google images](https://github.com/user-attachments/assets/22831883-2242-4295-9395-ea049dc4faae)
-
-![Majevica model with the topographic map](https://github.com/user-attachments/assets/e9c6ad7c-8859-4f59-8437-04310c602d06)
-
-
-### Application
-![Starting screen with turned off cameras](https://github.com/user-attachments/assets/efe89f46-6145-4ba5-ac83-1b3ae9928008)
-
-![Screen with camera viewes](https://github.com/user-attachments/assets/3aec547e-6b57-48cf-bce0-ca06b91c95b1)
-
-
 
 ## Getting Started
 
